@@ -22,6 +22,8 @@ INSTALLED_APPS = [
     "django_filters",
     # Local
     "apps.accounts",
+    "apps.workflows",
+    "apps.instances",
 ]
 
 MIDDLEWARE = [

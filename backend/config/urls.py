@@ -1,9 +1,18 @@
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import RegisterView, LoginView
+from apps.instances.views import WorkflowInstanceViewSet
+from apps.workflows.views import WorkflowDefinitionViewSet, StateViewSet, TransitionViewSet
 from .health import health_check
+
+router = DefaultRouter()
+router.register(r"workflows", WorkflowDefinitionViewSet, basename="workflow")
+router.register(r"states", StateViewSet, basename="state")
+router.register(r"transitions", TransitionViewSet, basename="transition")
+router.register(r"instances", WorkflowInstanceViewSet, basename="instance")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -11,6 +20,7 @@ urlpatterns = [
     path("api/auth/register/", RegisterView.as_view(), name="auth-register"),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
+    path("api/", include(router.urls)),
     # Health
     path("api/health/", health_check, name="health-check"),
 ]
