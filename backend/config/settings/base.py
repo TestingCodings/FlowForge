@@ -3,6 +3,7 @@ Django settings — base configuration shared across all environments.
 """
 from pathlib import Path
 from decouple import config
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -22,6 +23,10 @@ INSTALLED_APPS = [
     "django_filters",
     # Local
     "apps.accounts",
+    "apps.workflows",
+    "apps.instances",
+    "apps.forms",
+    "apps.tasks",
 ]
 
 MIDDLEWARE = [
@@ -93,9 +98,6 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
 }
 
-# JWT
-from datetime import timedelta
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", default=60, cast=int)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_TOKEN_LIFETIME_DAYS", default=7, cast=int)),
@@ -111,6 +113,12 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
+CELERY_BEAT_SCHEDULE = {
+    "mark-overdue-tasks-hourly": {
+        "task": "tasks.mark_overdue_tasks",
+        "schedule": timedelta(hours=1),
+    }
+}
 
 # Logging
 LOGGING = {

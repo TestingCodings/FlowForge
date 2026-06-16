@@ -1,0 +1,62 @@
+from rest_framework import serializers
+
+from apps.instances.models import WorkflowInstance
+
+from .models import FormDefinition, FormSubmission
+from .validation import validate_submission
+
+
+class FormDefinitionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormDefinition
+        fields = (
+            "id",
+            "workflow_definition",
+            "state",
+            "name",
+            "schema",
+            "version",
+            "created_by",
+            "created_at",
+        )
+        read_only_fields = ("id", "created_by", "created_at")
+
+    def validate(self, attrs):
+        workflow_definition = attrs.get("workflow_definition") or self.instance.workflow_definition
+        state = attrs.get("state") or self.instance.state
+        if state.workflow_definition_id != workflow_definition.id:
+            raise serializers.ValidationError("state must belong to workflow_definition")
+        return attrs
+
+    def create(self, validated_data):
+        return FormDefinition.objects.create(created_by=self.context["request"].user, **validated_data)
+
+
+class FormSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormSubmission
+        fields = (
+            "id",
+            "workflow_instance",
+            "form_definition",
+            "submitted_by",
+            "submitted_at",
+            "data",
+        )
+        read_only_fields = ("id", "submitted_by", "submitted_at")
+
+    def validate(self, attrs):
+        workflow_instance: WorkflowInstance = attrs["workflow_instance"]
+        form_definition: FormDefinition = attrs["form_definition"]
+
+        if form_definition.workflow_definition_id != workflow_instance.workflow_definition_id:
+            raise serializers.ValidationError("form_definition does not belong to instance workflow")
+
+        if form_definition.state_id != workflow_instance.current_state_id:
+            raise serializers.ValidationError("form_definition does not match current instance state")
+
+        validate_submission(form_definition.schema, attrs.get("data", {}))
+        return attrs
+
+    def create(self, validated_data):
+        return FormSubmission.objects.create(submitted_by=self.context["request"].user, **validated_data)
