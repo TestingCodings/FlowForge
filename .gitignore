@@ -57,3 +57,6 @@ node_modules/
 frontend/dist/
 frontend/build/
 frontend/.env
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts

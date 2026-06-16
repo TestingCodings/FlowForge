@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from apps.audit.services import form_submitted
 from apps.instances.models import WorkflowInstance
+from apps.notifications.services import queue_event_notifications
 
 from .models import FormDefinition, FormSubmission
 from .validation import validate_submission
@@ -65,5 +66,14 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
             workflow_instance=submission.workflow_instance,
             actor=self.context["request"].user,
             payload={"submission_id": str(submission.id), "form_definition_id": str(submission.form_definition_id)},
+        )
+        queue_event_notifications(
+            workflow_instance=submission.workflow_instance,
+            event_trigger="form_submitted",
+            context_data={
+                "form_id": str(submission.form_definition_id),
+                "instance": {"reference_number": submission.workflow_instance.reference_number},
+                "recipient_email": self.context["request"].user.email,
+            },
         )
         return submission

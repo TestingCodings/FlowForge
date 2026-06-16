@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.audit.services import instance_created
+from apps.notifications.services import queue_event_notifications
 from apps.tasks.services import create_tasks_for_state
 from apps.workflows.models import Transition
 from .models import WorkflowInstance
@@ -46,6 +47,14 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             payload={"reference_number": instance.reference_number},
             ip_address=request.META.get("REMOTE_ADDR", "") if request else "",
             user_agent=request.META.get("HTTP_USER_AGENT", "") if request else "",
+        )
+        queue_event_notifications(
+            workflow_instance=instance,
+            event_trigger="instance_created",
+            context_data={
+                "instance": {"reference_number": instance.reference_number},
+                "recipient_email": request.user.email if request else "",
+            },
         )
         return instance
 

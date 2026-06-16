@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.audit.services import rule_fired, transition_applied
+from apps.notifications.services import queue_event_notifications
 from apps.tasks.services import create_tasks_for_state
 from apps.workflows.engine import WorkflowTransitionError, perform_transition
 
@@ -41,6 +42,17 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         )
         for action in result.actions:
             rule_fired(workflow_instance=instance, actor=request.user, payload=action)
+
+        queue_event_notifications(
+            workflow_instance=instance,
+            event_trigger="state_transition",
+            context_data={
+                "instance": {"reference_number": instance.reference_number},
+                "from_state": from_state_name,
+                "to_state": instance.current_state.name,
+                "recipient_email": request.user.email,
+            },
+        )
 
         payload = WorkflowInstanceSerializer(instance).data
         payload["transition_applied"] = {

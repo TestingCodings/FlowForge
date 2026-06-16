@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.audit.services import task_assigned, task_completed
+from apps.notifications.services import queue_event_notifications
 from apps.workflows.engine import perform_transition
 from apps.workflows.models import Transition
 
@@ -50,6 +51,15 @@ def create_tasks_for_state(instance, actions=None):
         actor=None,
         payload={"task_id": str(task.id), "title": task.title, "state": state.name},
     )
+    queue_event_notifications(
+        workflow_instance=instance,
+        event_trigger="task_assigned",
+        context_data={
+            "task_title": task.title,
+            "state": state.name,
+            "recipient_email": instance.created_by.email if instance.created_by else "",
+        },
+    )
     return [task]
 
 
@@ -78,6 +88,14 @@ def complete_task(task, user):
         workflow_instance=task.workflow_instance,
         actor=user,
         payload={"task_id": str(task.id), "title": task.title},
+    )
+    queue_event_notifications(
+        workflow_instance=task.workflow_instance,
+        event_trigger="task_completed",
+        context_data={
+            "task_title": task.title,
+            "recipient_email": user.email,
+        },
     )
 
     remaining = task.workflow_instance.tasks.filter(
