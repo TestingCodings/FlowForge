@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.instances",
     "apps.forms",
     "apps.tasks",
+    "apps.audit",
 ]
 
 MIDDLEWARE = [

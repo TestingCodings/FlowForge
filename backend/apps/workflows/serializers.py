@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import State, Transition, WorkflowDefinition
+from .models import Rule, State, Transition, WorkflowDefinition
 
 
 class StateSerializer(serializers.ModelSerializer):
@@ -37,9 +37,24 @@ class TransitionSerializer(serializers.ModelSerializer):
         read_only_fields = ("id",)
 
 
+class RuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Rule
+        fields = (
+            "id",
+            "workflow_definition",
+            "transition",
+            "condition",
+            "action",
+            "priority",
+        )
+        read_only_fields = ("id",)
+
+
 class WorkflowDefinitionSerializer(serializers.ModelSerializer):
     states = StateSerializer(many=True, read_only=True)
     transitions = TransitionSerializer(many=True, read_only=True)
+    rules = RuleSerializer(many=True, read_only=True)
 
     class Meta:
         model = WorkflowDefinition
@@ -53,6 +68,7 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "created_at",
             "states",
             "transitions",
+            "rules",
         )
         read_only_fields = ("id", "created_by", "created_at")
 

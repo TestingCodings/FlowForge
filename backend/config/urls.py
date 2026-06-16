@@ -4,20 +4,23 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import RegisterView, LoginView
+from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
 from apps.tasks.views import TaskViewSet
-from apps.workflows.views import WorkflowDefinitionViewSet, StateViewSet, TransitionViewSet
+from apps.workflows.views import WorkflowDefinitionViewSet, RuleViewSet, StateViewSet, TransitionViewSet
 from .health import health_check
 
 router = DefaultRouter()
 router.register(r"workflows", WorkflowDefinitionViewSet, basename="workflow")
 router.register(r"states", StateViewSet, basename="state")
 router.register(r"transitions", TransitionViewSet, basename="transition")
+router.register(r"rules", RuleViewSet, basename="rule")
 router.register(r"instances", WorkflowInstanceViewSet, basename="instance")
 router.register(r"forms", FormDefinitionViewSet, basename="form")
 router.register(r"submissions", FormSubmissionViewSet, basename="submission")
 router.register(r"tasks", TaskViewSet, basename="task")
+router.register(r"audit", AuditLogAdminViewSet, basename="audit")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -25,6 +28,7 @@ urlpatterns = [
     path("api/auth/register/", RegisterView.as_view(), name="auth-register"),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
+    path("api/audit/<uuid:instance_id>/", AuditTrailByInstanceView.as_view(), name="audit-by-instance"),
     path("api/", include(router.urls)),
     # Health
     path("api/health/", health_check, name="health-check"),

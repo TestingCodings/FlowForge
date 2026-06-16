@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import State, Transition, WorkflowDefinition
+from .models import Rule, State, Transition, WorkflowDefinition
 
 
 @admin.register(WorkflowDefinition)
@@ -22,3 +22,9 @@ class TransitionAdmin(admin.ModelAdmin):
     list_display = ("name", "workflow_definition", "from_state", "to_state", "requires_approval")
     list_filter = ("requires_approval",)
     search_fields = ("name", "workflow_definition__name")
+
+
+@admin.register(Rule)
+class RuleAdmin(admin.ModelAdmin):
+    list_display = ("workflow_definition", "transition", "priority")
+    list_filter = ("workflow_definition",)

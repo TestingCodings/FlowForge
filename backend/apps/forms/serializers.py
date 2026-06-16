@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.audit.services import form_submitted
 from apps.instances.models import WorkflowInstance
 
 from .models import FormDefinition, FormSubmission
@@ -59,4 +60,10 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return FormSubmission.objects.create(submitted_by=self.context["request"].user, **validated_data)
+        submission = FormSubmission.objects.create(submitted_by=self.context["request"].user, **validated_data)
+        form_submitted(
+            workflow_instance=submission.workflow_instance,
+            actor=self.context["request"].user,
+            payload={"submission_id": str(submission.id), "form_definition_id": str(submission.form_definition_id)},
+        )
+        return submission

@@ -94,3 +94,29 @@ class Transition(models.Model):
 
     def __str__(self):
         return f"{self.name}: {self.from_state.name} -> {self.to_state.name}"
+
+
+class Rule(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workflow_definition = models.ForeignKey(
+        WorkflowDefinition,
+        on_delete=models.CASCADE,
+        related_name="rules",
+    )
+    transition = models.ForeignKey(
+        Transition,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="rules",
+    )
+    condition = models.JSONField(default=dict)
+    action = models.JSONField(default=dict)
+    priority = models.PositiveIntegerField(default=100)
+
+    class Meta:
+        db_table = "workflow_rule"
+        ordering = ["priority", "id"]
+
+    def __str__(self):
+        return f"Rule {self.id} ({self.priority})"

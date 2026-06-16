@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from apps.workflows.models import Transition
+from apps.workflows.rules import evaluate_for_transition
 
 
 class WorkflowTransitionError(Exception):
@@ -10,6 +11,7 @@ class WorkflowTransitionError(Exception):
 @dataclass
 class TransitionResult:
     transition: Transition
+    actions: list[dict]
 
 
 def validate_transition(instance, transition_id):
@@ -26,7 +28,13 @@ def validate_transition(instance, transition_id):
             f"Transition '{transition.name}' is invalid from state '{instance.current_state.name}'"
         )
 
-    return TransitionResult(transition=transition)
+    actions = evaluate_for_transition(instance, transition)
+    for action in actions:
+        if action.get("type") == "block_transition":
+            reason = action.get("reason", "Transition blocked by rule")
+            raise WorkflowTransitionError(reason)
+
+    return TransitionResult(transition=transition, actions=actions)
 
 
 def perform_transition(instance, transition_id):
