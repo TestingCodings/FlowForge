@@ -14,6 +14,11 @@ class StateSerializer(serializers.ModelSerializer):
             "is_initial",
             "is_terminal",
             "position_order",
+            "requires_task",
+            "task_title",
+            "task_description",
+            "task_assigned_role",
+            "task_sla_hours",
         )
         read_only_fields = ("id",)
 
@@ -112,6 +117,11 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
                 is_initial=state_payload.get("is_initial", False),
                 is_terminal=state_payload.get("is_terminal", False),
                 position_order=state_payload.get("position_order", 1),
+                requires_task=state_payload.get("requires_task", not state_payload.get("is_terminal", False)),
+                task_title=state_payload.get("task_title", ""),
+                task_description=state_payload.get("task_description", ""),
+                task_assigned_role=state_payload.get("task_assigned_role", ""),
+                task_sla_hours=state_payload.get("task_sla_hours", 48),
             )
             state_map[state.name] = state
 

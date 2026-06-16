@@ -38,6 +38,11 @@ class State(models.Model):
     is_initial = models.BooleanField(default=False)
     is_terminal = models.BooleanField(default=False)
     position_order = models.PositiveIntegerField(default=1)
+    requires_task = models.BooleanField(default=True)
+    task_title = models.CharField(max_length=200, blank=True)
+    task_description = models.TextField(blank=True)
+    task_assigned_role = models.CharField(max_length=50, blank=True)
+    task_sla_hours = models.PositiveIntegerField(default=48)
 
     class Meta:
         db_table = "workflow_state"

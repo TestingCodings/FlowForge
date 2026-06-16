@@ -4,7 +4,9 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import RegisterView, LoginView
+from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
+from apps.tasks.views import TaskViewSet
 from apps.workflows.views import WorkflowDefinitionViewSet, StateViewSet, TransitionViewSet
 from .health import health_check
 
@@ -13,6 +15,9 @@ router.register(r"workflows", WorkflowDefinitionViewSet, basename="workflow")
 router.register(r"states", StateViewSet, basename="state")
 router.register(r"transitions", TransitionViewSet, basename="transition")
 router.register(r"instances", WorkflowInstanceViewSet, basename="instance")
+router.register(r"forms", FormDefinitionViewSet, basename="form")
+router.register(r"submissions", FormSubmissionViewSet, basename="submission")
+router.register(r"tasks", TaskViewSet, basename="task")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

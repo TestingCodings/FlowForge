@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.tasks.services import create_tasks_for_state
 from apps.workflows.models import Transition
 from .models import WorkflowInstance
 
@@ -32,7 +33,12 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
-        return WorkflowInstance.objects.create(created_by=self.context["request"].user, **validated_data)
+        instance = WorkflowInstance.objects.create(
+            created_by=self.context["request"].user,
+            **validated_data,
+        )
+        create_tasks_for_state(instance)
+        return instance
 
 
 class TransitionRequestSerializer(serializers.Serializer):

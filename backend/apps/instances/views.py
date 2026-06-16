@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.tasks.services import create_tasks_for_state
 from apps.workflows.engine import WorkflowTransitionError, perform_transition
 
 from .models import WorkflowInstance
@@ -23,6 +24,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
         try:
             result = perform_transition(instance, serializer.validated_data["transition_id"])
+            create_tasks_for_state(instance)
         except WorkflowTransitionError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
