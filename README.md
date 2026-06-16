@@ -64,6 +64,7 @@ flowforge/
 ## Development Phases
 
 See [implementation.md](implementation.md) for the full breakdown.
+See [USER_GUIDE.md](USER_GUIDE.md) for end-user and admin usage.
 
 | Phase | Feature | Status |
 |-------|---------|--------|
