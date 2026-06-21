@@ -5,18 +5,65 @@ import { apiClient } from "../api/client";
 import { Workflow } from "../types/api";
 import StateGraph from "../components/StateGraph";
 
+/* ─── Constants ─── */
+const OPERATORS = [
+  { value: "gt",          label: "> greater than" },
+  { value: "gte",         label: "≥ greater or equal" },
+  { value: "lt",          label: "< less than" },
+  { value: "lte",         label: "≤ less or equal" },
+  { value: "eq",          label: "= equals" },
+  { value: "ne",          label: "≠ not equals" },
+  { value: "contains",    label: "contains (string)" },
+  { value: "starts_with", label: "starts with (string)" },
+  { value: "is_true",     label: "is true (boolean)" },
+  { value: "is_false",    label: "is false (boolean)" },
+];
+
+const ACTION_TYPES = [
+  { value: "block_transition", label: "Block transition" },
+  { value: "assign_role",      label: "Assign role" },
+];
+
+const ROLES = [
+  { value: "approver",          label: "Approver" },
+  { value: "platform_admin",    label: "Platform Admin" },
+  { value: "workflow_designer", label: "Workflow Designer" },
+  { value: "participant",       label: "Participant" },
+  { value: "viewer",            label: "Viewer" },
+];
+
+const BOOLEAN_OPS = ["is_true", "is_false"];
+
+/* ─── Empty rule form state ─── */
+const emptyForm = () => ({
+  transitionId: "",  // "" = all transitions
+  field: "",
+  operator: "gt",
+  value: "",
+  actionType: "block_transition",
+  reason: "",
+  role: "approver",
+  priority: 1,
+});
+
 export default function WorkflowDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+
+  const [showRuleForm, setShowRuleForm] = useState(false);
+  const [form, setForm] = useState(emptyForm());
+  const [ruleError, setRuleError] = useState("");
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  /* ─── Queries ─── */
   const { data: wf, isLoading } = useQuery<Workflow>({
     queryKey: ["workflow", id],
     queryFn: async () => (await apiClient.get(`/workflows/${id}/`)).data,
     enabled: Boolean(id),
   });
 
+  /* ─── Mutations ─── */
   const createInstance = useMutation({
     mutationFn: async () =>
       (await apiClient.post("/instances/", { workflow_definition: id })).data,
@@ -26,9 +73,59 @@ export default function WorkflowDetailPage() {
       setCreateError(null);
       setTimeout(() => setCreateMsg(null), 4000);
     },
-    onError: (err: any) => setCreateError(err?.response?.data?.detail ?? "Failed to create"),
+    onError: (err: any) =>
+      setCreateError(err?.response?.data?.detail ?? "Failed to create instance"),
   });
 
+  const addRule = useMutation({
+    mutationFn: async () => {
+      if (!form.field.trim()) throw new Error("Field is required");
+      if (!BOOLEAN_OPS.includes(form.operator) && !form.value.toString().trim())
+        throw new Error("Value is required");
+      if (form.actionType === "block_transition" && !form.reason.trim())
+        throw new Error("Block reason is required");
+
+      const condition: Record<string, unknown> = { field: form.field.trim(), operator: form.operator };
+      if (!BOOLEAN_OPS.includes(form.operator)) {
+        const raw = form.value.trim();
+        condition.value = isNaN(Number(raw)) ? raw : Number(raw);
+      }
+
+      const action: Record<string, unknown> =
+        form.actionType === "block_transition"
+          ? { type: "block_transition", reason: form.reason.trim() }
+          : { type: "assign_role", role: form.role };
+
+      return (
+        await apiClient.post("/rules/", {
+          workflow_definition: id,
+          transition: form.transitionId || null,
+          condition,
+          action,
+          priority: Number(form.priority),
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workflow", id] });
+      setForm(emptyForm());
+      setShowRuleForm(false);
+      setRuleError("");
+    },
+    onError: (err: any) => {
+      const msg = err.message?.startsWith("Field") || err.message?.startsWith("Value") || err.message?.startsWith("Block")
+        ? err.message
+        : err?.response?.data?.detail ?? JSON.stringify(err?.response?.data ?? "Failed to save rule");
+      setRuleError(msg);
+    },
+  });
+
+  const deleteRule = useMutation({
+    mutationFn: async (ruleId: string) => apiClient.delete(`/rules/${ruleId}/`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["workflow", id] }),
+  });
+
+  /* ─── Loading / not found ─── */
   if (isLoading) {
     return (
       <div>
@@ -37,16 +134,17 @@ export default function WorkflowDetailPage() {
       </div>
     );
   }
+  if (!wf) return <div className="card empty-state"><p>Workflow not found.</p></div>;
 
-  if (!wf) {
-    return <div className="card empty-state"><p>Workflow not found.</p></div>;
-  }
+  const isBooleanOp = BOOLEAN_OPS.includes(form.operator);
+  const initialState = (wf.states ?? []).find((s) => s.is_initial);
 
+  /* ─── Render ─── */
   return (
     <div>
+      {/* Breadcrumb + header */}
       <div className="breadcrumb">
-        <Link to="/workflows">Workflows</Link>
-        <span>/</span>
+        <Link to="/workflows">Workflows</Link><span>/</span>
         <span style={{ color: "var(--text-primary)" }}>{wf.name}</span>
       </div>
 
@@ -69,48 +167,44 @@ export default function WorkflowDetailPage() {
         <StateGraph
           states={wf.states ?? []}
           transitions={wf.transitions ?? []}
-          currentStateId={(wf.states ?? []).find((s) => s.is_initial)?.id ?? ""}
+          currentStateId={initialState?.id ?? ""}
         />
       </div>
 
-      {/* Create instance banner */}
+      {/* Create-instance banner */}
       {wf.is_active && (
         <div className="card mb-4" style={{ background: "rgba(99,102,241,0.07)", borderColor: "rgba(99,102,241,0.3)" }}>
           <div className="flex items-center gap-3">
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, marginBottom: 3 }}>Start a new instance</div>
-              <div className="text-sm text-muted">Creates a new {wf.reference_prefix} case at the "{(wf.states ?? []).find(s => s.is_initial)?.display_name}" state</div>
+              <div className="text-sm text-muted">
+                Creates a new {wf.reference_prefix} case at "{initialState?.display_name ?? initialState?.name}" state
+              </div>
             </div>
-            <button
-              className="btn-primary"
-              onClick={() => createInstance.mutate()}
-              disabled={createInstance.isPending}
-            >
+            <button className="btn-primary" onClick={() => createInstance.mutate()} disabled={createInstance.isPending}>
               {createInstance.isPending ? "Creating…" : `+ New ${wf.reference_prefix}`}
             </button>
           </div>
-          {createMsg && <div className="alert alert-success mt-2">{createMsg}</div>}
-          {createError && <div className="alert alert-error mt-2">{createError}</div>}
+          {createMsg   && <div className="alert alert-success mt-2">{createMsg}</div>}
+          {createError && <div className="alert alert-error   mt-2">{createError}</div>}
         </div>
       )}
 
-      <div className="grid grid-2">
-        {/* States */}
+      {/* States + Transitions */}
+      <div className="grid grid-2 mb-4">
         <div className="card">
           <div className="card-header">
             <h3>States</h3>
             <span className="badge badge-inactive">{wf.states?.length ?? 0}</span>
           </div>
           <table className="table">
-            <thead>
-              <tr><th>Name</th><th>Type</th><th>SLA (hrs)</th></tr>
-            </thead>
+            <thead><tr><th>Name</th><th>Type</th><th>SLA</th></tr></thead>
             <tbody>
               {(wf.states ?? []).sort((a, b) => a.position_order - b.position_order).map((s) => (
                 <tr key={s.id}>
                   <td style={{ fontWeight: 500 }}>{s.display_name || s.name}</td>
                   <td>
-                    {s.is_initial && <span className="badge badge-initial">Start</span>}
+                    {s.is_initial  && <span className="badge badge-initial">Start</span>}
                     {s.is_terminal && <span className="badge badge-terminal">End</span>}
                     {!s.is_initial && !s.is_terminal && <span className="badge badge-inactive">Step</span>}
                   </td>
@@ -123,26 +217,21 @@ export default function WorkflowDetailPage() {
           </table>
         </div>
 
-        {/* Transitions */}
         <div className="card">
           <div className="card-header">
             <h3>Transitions</h3>
             <span className="badge badge-inactive">{wf.transitions?.length ?? 0}</span>
           </div>
           <table className="table">
-            <thead>
-              <tr><th>Name</th><th>From → To</th><th>Approval</th></tr>
-            </thead>
+            <thead><tr><th>Name</th><th>From → To</th><th>Approval</th></tr></thead>
             <tbody>
               {(wf.transitions ?? []).map((t) => {
-                const from = (wf.states ?? []).find(s => s.id === t.from_state);
-                const to   = (wf.states ?? []).find(s => s.id === t.to_state);
+                const from = (wf.states ?? []).find((s) => s.id === t.from_state);
+                const to   = (wf.states ?? []).find((s) => s.id === t.to_state);
                 return (
                   <tr key={t.id}>
                     <td style={{ fontWeight: 500 }}>{t.name}</td>
-                    <td className="text-sm text-muted">
-                      {from?.name ?? "?"} → {to?.name ?? "?"}
-                    </td>
+                    <td className="text-sm text-muted">{from?.name} → {to?.name}</td>
                     <td>
                       {t.requires_approval
                         ? <span className="badge badge-pending">Required</span>
@@ -154,42 +243,266 @@ export default function WorkflowDetailPage() {
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Rules */}
-        {(wf.rules ?? []).length > 0 && (
-          <div className="card" style={{ gridColumn: "1 / -1" }}>
-            <div className="card-header">
-              <h3>Rules</h3>
-              <span className="badge badge-warning">{wf.rules.length} rules</span>
-            </div>
-            <table className="table">
-              <thead>
-                <tr><th>Transition</th><th>Condition</th><th>Action</th><th>Priority</th></tr>
-              </thead>
-              <tbody>
-                {(wf.rules ?? []).map((r) => {
-                  const tr = (wf.transitions ?? []).find(t => t.id === r.transition);
-                  const cond = r.condition as any;
-                  const act  = r.action as any;
-                  return (
-                    <tr key={r.id}>
-                      <td className="text-sm">{tr?.name ?? r.transition}</td>
-                      <td className="text-sm text-muted font-mono">
-                        {cond.field} {cond.operator} {String(cond.value)}
-                      </td>
-                      <td>
-                        <span className={`badge ${act.type === "block_transition" ? "badge-danger" : "badge-warning"}`}>
-                          {act.type.replace(/_/g, " ")}
-                        </span>
-                        {act.reason && <span className="text-xs text-muted" style={{ marginLeft: 6 }}>{act.reason}</span>}
-                      </td>
-                      <td className="text-muted text-sm">{r.priority}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* ── Rules section ── */}
+      <div className="card">
+        <div className="card-header">
+          <div className="flex items-center gap-3">
+            <h3>Rules</h3>
+            {(wf.rules ?? []).length > 0 && (
+              <span className="badge badge-warning">{wf.rules.length} active</span>
+            )}
           </div>
+          <button
+            className={showRuleForm ? "btn-secondary btn-sm" : "btn-primary btn-sm"}
+            onClick={() => { setShowRuleForm((v) => !v); setRuleError(""); }}
+          >
+            {showRuleForm ? "Cancel" : "+ Add Rule"}
+          </button>
+        </div>
+
+        {/* ── Rule Builder Form ── */}
+        {showRuleForm && (
+          <div style={{
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: 20,
+            marginBottom: 20,
+          }}>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-secondary)", marginBottom: 16 }}>
+              New Rule
+            </div>
+
+            {/* Row 1: Trigger */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Trigger transition</label>
+                <select value={form.transitionId} onChange={(e) => setForm({ ...form, transitionId: e.target.value })}>
+                  <option value="">All transitions (global)</option>
+                  {(wf.transitions ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted" style={{ marginTop: 4, display: "block" }}>
+                  Which transition fires this rule. "All" = fires on every transition attempt.
+                </span>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Priority</label>
+                <input
+                  type="number" min={1} max={100}
+                  value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
+                />
+                <span className="text-xs text-muted" style={{ marginTop: 4, display: "block" }}>
+                  Lower number = evaluated first. Use 1 for highest priority.
+                </span>
+              </div>
+            </div>
+
+            {/* Condition builder */}
+            <div style={{
+              background: "var(--bg-base)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              padding: 14,
+              marginBottom: 12,
+            }}>
+              <div className="text-xs text-muted mb-2" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Condition — reads from instance metadata
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 10 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Field</label>
+                  <input
+                    placeholder="e.g. claim_value"
+                    value={form.field}
+                    onChange={(e) => setForm({ ...form, field: e.target.value })}
+                    style={{ fontFamily: "monospace" }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Operator</label>
+                  <select value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })}>
+                    {OPERATORS.map((op) => (
+                      <option key={op.value} value={op.value}>{op.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Value</label>
+                  <input
+                    placeholder={isBooleanOp ? "— not needed —" : "e.g. 10000"}
+                    value={form.value}
+                    onChange={(e) => setForm({ ...form, value: e.target.value })}
+                    disabled={isBooleanOp}
+                    style={{ fontFamily: "monospace", opacity: isBooleanOp ? 0.4 : 1 }}
+                  />
+                </div>
+              </div>
+              {/* Live preview */}
+              {form.field && (
+                <div style={{ marginTop: 10, padding: "6px 10px", background: "rgba(99,102,241,0.08)", borderRadius: 6, fontFamily: "monospace", fontSize: "0.8rem", color: "var(--accent-light)" }}>
+                  IF {form.field} {form.operator}{!isBooleanOp && form.value ? ` ${form.value}` : ""}
+                </div>
+              )}
+            </div>
+
+            {/* Action builder */}
+            <div style={{
+              background: "var(--bg-base)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              padding: 14,
+              marginBottom: 14,
+            }}>
+              <div className="text-xs text-muted mb-2" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Action — what happens when condition is met
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Action type</label>
+                  <select value={form.actionType} onChange={(e) => setForm({ ...form, actionType: e.target.value })}>
+                    {ACTION_TYPES.map((a) => (
+                      <option key={a.value} value={a.value}>{a.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {form.actionType === "block_transition" ? (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Block reason (shown to user)</label>
+                    <input
+                      placeholder="e.g. Claims over £10,000 require Director approval."
+                      value={form.reason}
+                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Assign to role</label>
+                    <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                      {ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              {/* Action preview */}
+              {form.field && (
+                <div style={{ marginTop: 10, padding: "6px 10px", background: form.actionType === "block_transition" ? "rgba(248,81,73,0.08)" : "rgba(63,185,80,0.08)", borderRadius: 6, fontFamily: "monospace", fontSize: "0.8rem", color: form.actionType === "block_transition" ? "#ff8a84" : "#6fda8a" }}>
+                  THEN {form.actionType === "block_transition"
+                    ? `block — "${form.reason || "reason required"}"`
+                    : `assign role → ${form.role}`}
+                </div>
+              )}
+            </div>
+
+            {ruleError && <div className="alert alert-error mb-3">{ruleError}</div>}
+
+            <div className="flex gap-2">
+              <button
+                className="btn-primary"
+                onClick={() => addRule.mutate()}
+                disabled={addRule.isPending}
+              >
+                {addRule.isPending ? "Saving…" : "Save Rule"}
+              </button>
+              <button className="btn-secondary" onClick={() => { setShowRuleForm(false); setForm(emptyForm()); setRuleError(""); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Rules table ── */}
+        {(wf.rules ?? []).length === 0 && !showRuleForm ? (
+          <div className="empty-state" style={{ padding: "28px 0" }}>
+            <p>No rules yet.</p>
+            <p className="text-xs" style={{ marginTop: 6 }}>
+              Rules automatically block or modify transitions based on instance data.
+              <br />Click <strong>+ Add Rule</strong> to create your first one.
+            </p>
+          </div>
+        ) : (wf.rules ?? []).length > 0 ? (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Trigger</th>
+                <th>Condition</th>
+                <th>Action</th>
+                <th style={{ width: 60 }}>Priority</th>
+                <th style={{ width: 48 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(wf.rules ?? []).sort((a, b) => a.priority - b.priority).map((r) => {
+                const tr   = (wf.transitions ?? []).find((t) => t.id === r.transition);
+                const cond = r.condition as any;
+                const act  = r.action as any;
+                const isBool = BOOLEAN_OPS.includes(cond.operator);
+
+                return (
+                  <tr key={r.id}>
+                    <td className="text-sm">
+                      {tr
+                        ? <span style={{ fontWeight: 500 }}>{tr.name}</span>
+                        : <span className="text-muted">All transitions</span>}
+                    </td>
+                    <td>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "var(--accent-light)" }}>
+                        {cond.field} {cond.operator}{!isBool && cond.value !== undefined ? ` ${cond.value}` : ""}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span className={`badge ${act.type === "block_transition" ? "badge-danger" : "badge-active"}`} style={{ alignSelf: "flex-start" }}>
+                          {act.type === "block_transition" ? "Block" : "Assign role"}
+                        </span>
+                        {act.reason && (
+                          <span className="text-xs text-muted" style={{ maxWidth: 280, lineHeight: 1.4 }}>{act.reason}</span>
+                        )}
+                        {act.role && (
+                          <span className={`badge badge-role-${act.role}`} style={{ alignSelf: "flex-start", fontSize: "0.68rem" }}>{act.role}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="text-muted text-sm">{r.priority}</td>
+                    <td>
+                      <button
+                        className="btn-ghost btn-sm"
+                        title="Delete rule"
+                        onClick={() => deleteRule.mutate(r.id)}
+                        disabled={deleteRule.isPending}
+                        style={{ color: "var(--danger)", padding: "4px 8px" }}
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : null}
+
+        {/* Operator reference */}
+        {showRuleForm && (
+          <details style={{ marginTop: 16 }}>
+            <summary className="text-xs text-muted" style={{ cursor: "pointer", userSelect: "none" }}>
+              Operator reference
+            </summary>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6, marginTop: 10 }}>
+              {OPERATORS.map((op) => (
+                <div key={op.value} style={{ padding: "6px 10px", background: "var(--bg-base)", borderRadius: 6, fontSize: "0.78rem" }}>
+                  <span style={{ fontFamily: "monospace", color: "var(--accent-light)", marginRight: 6 }}>{op.value}</span>
+                  <span className="text-muted">{op.label.replace(/^[^(]+/, "").replace(/[()]/g, "").trim() || op.label}</span>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
       </div>
     </div>
