@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.audit.models import AuditActionType, AuditLog
 from apps.audit.services import rule_fired, transition_applied
 from apps.notifications.services import queue_event_notifications
 from apps.tasks.services import create_tasks_for_state
@@ -62,3 +63,22 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             "to_state": result.transition.to_state.name,
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="comment")
+    def comment(self, request, pk=None):
+        """Add a comment to the instance audit trail. Body: {"body": "..."}"""
+        instance = self.get_object()
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "Comment body is required."}, status=status.HTTP_400_BAD_REQUEST)
+        AuditLog.objects.create(
+            workflow_instance=instance,
+            actor=request.user,
+            action_type=AuditActionType.COMMENT,
+            from_state=instance.current_state.name,
+            to_state="",
+            payload={"body": body},
+            ip_address=request.META.get("REMOTE_ADDR", ""),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+        return Response({"detail": "Comment added."}, status=status.HTTP_201_CREATED)
