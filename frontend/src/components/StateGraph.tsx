@@ -125,9 +125,10 @@ export default function StateGraph({
 
   function stateStatus(state: State) {
     if (state.id === currentStateId) return "active";
-    if (visitedStateNames.includes(state.name)) return "completed";
-    if (!currentState) return "pending";
-    if (state.position_order < (currentState?.position_order ?? 999)) return "completed";
+    // Only mark as completed if the audit trail explicitly recorded this state as visited.
+    // Never use position_order as a proxy — branching flows have states at lower orders
+    // that were never actually reached (e.g. "Approved" when the claim was "Rejected").
+    if (visitedStateNames.includes(state.name) || visitedStateNames.includes(state.display_name)) return "completed";
     return "pending";
   }
 

@@ -9,6 +9,7 @@ from apps.accounts.models import Role, RoleName, User, UserRole
 from apps.workflows.models import Rule, State, Transition, WorkflowDefinition
 from apps.instances.models import WorkflowInstance
 from apps.workflows.engine import perform_transition
+from apps.audit.services import instance_created, transition_applied
 
 
 DEMO_USERS = [
@@ -184,9 +185,17 @@ class Command(BaseCommand):
                 created_by=creator,
                 metadata_json=inst_spec["meta"],
             )
+            instance_created(instance, actor=creator)
             for tr_name in inst_spec.get("advance", []):
                 tr = Transition.objects.get(workflow_definition=wf, from_state=instance.current_state, name=tr_name)
+                from_name = instance.current_state.name
                 perform_transition(instance, tr.id)
                 instance.refresh_from_db()
+                transition_applied(
+                    instance, actor=creator,
+                    from_state=from_name,
+                    to_state=instance.current_state.name,
+                    payload={"transition_name": tr_name, "seeded": True},
+                )
             if not quiet:
                 self.stdout.write(f"    {instance.reference_number} [{instance.current_state.name}]")
