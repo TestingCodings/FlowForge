@@ -14,11 +14,8 @@ class StateSerializer(serializers.ModelSerializer):
             "is_initial",
             "is_terminal",
             "position_order",
-            "requires_task",
-            "task_title",
-            "task_description",
-            "task_assigned_role",
-            "task_sla_hours",
+            "sla_config",
+            "task_config",
         )
         read_only_fields = ("id",)
 
@@ -32,6 +29,7 @@ class TransitionSerializer(serializers.ModelSerializer):
             "from_state",
             "to_state",
             "name",
+            "display_name",
             "requires_approval",
         )
         read_only_fields = ("id",)
@@ -62,15 +60,17 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "reference_prefix",
             "version",
             "is_active",
             "created_by",
             "created_at",
+            "updated_at",
             "states",
             "transitions",
             "rules",
         )
-        read_only_fields = ("id", "created_by", "created_at")
+        read_only_fields = ("id", "created_by", "created_at", "updated_at")
 
 
 class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
@@ -83,6 +83,7 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "reference_prefix",
             "version",
             "is_active",
             "states",
@@ -125,19 +126,16 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
         )
 
         state_map = {}
-        for state_payload in state_data:
+        for i, state_payload in enumerate(state_data, start=1):
             state = State.objects.create(
                 workflow_definition=workflow_definition,
                 name=state_payload["name"],
                 display_name=state_payload.get("display_name", ""),
                 is_initial=state_payload.get("is_initial", False),
                 is_terminal=state_payload.get("is_terminal", False),
-                position_order=state_payload.get("position_order", 1),
-                requires_task=state_payload.get("requires_task", not state_payload.get("is_terminal", False)),
-                task_title=state_payload.get("task_title", ""),
-                task_description=state_payload.get("task_description", ""),
-                task_assigned_role=state_payload.get("task_assigned_role", ""),
-                task_sla_hours=state_payload.get("task_sla_hours", 48),
+                position_order=state_payload.get("position_order", i),
+                sla_config=state_payload.get("sla_config", {}),
+                task_config=state_payload.get("task_config", {}),
             )
             state_map[state.name] = state
 
@@ -147,6 +145,7 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
                 from_state=state_map[transition_payload["from_state"]],
                 to_state=state_map[transition_payload["to_state"]],
                 name=transition_payload["name"],
+                display_name=transition_payload.get("display_name", ""),
                 requires_approval=transition_payload.get("requires_approval", False),
             )
 

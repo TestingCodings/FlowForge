@@ -40,6 +40,7 @@ class TestWorkflowEngineApi:
         create_workflow_payload = {
             "name": "Claim Review",
             "description": "Simple three-step claim workflow",
+            "reference_prefix": "CLA",
             "version": 1,
             "is_active": True,
             "states": [
@@ -103,7 +104,7 @@ class TestWorkflowEngineApi:
             "/api/instances/",
             {
                 "workflow_definition": workflow_id,
-                "metadata": {"claim_value": 2500, "claimant": "Jane Doe"},
+                "metadata_json": {"claim_value": 2500, "claimant": "Jane Doe"},
             },
             format="json",
         )
@@ -195,7 +196,7 @@ class TestStateMachineCore:
         instance = WorkflowInstance.objects.create(
             workflow_definition=workflow,
             created_by=user,
-            metadata={"unit_test": True},
+            metadata_json={"unit_test": True},
         )
         assert instance.current_state_id == draft.id
 

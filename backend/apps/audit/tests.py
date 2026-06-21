@@ -73,7 +73,7 @@ def test_transition_blocked_by_rule_and_audit_logged(user_and_client):
     instance = WorkflowInstance.objects.create(
         workflow_definition=wf,
         created_by=user,
-        metadata={"claim_value": 7000},
+        metadata_json={"claim_value": 7000},
     )
 
     response = client.post(
@@ -165,7 +165,7 @@ def test_rule_assign_role_applies_to_created_task(user_and_client):
         is_initial=True,
         is_terminal=False,
         position_order=1,
-        requires_task=False,
+        task_config={"requires_task": False},
     )
     s2 = State.objects.create(
         workflow_definition=wf,
@@ -173,7 +173,7 @@ def test_rule_assign_role_applies_to_created_task(user_and_client):
         is_initial=False,
         is_terminal=False,
         position_order=2,
-        requires_task=True,
+        task_config={"requires_task": True},
     )
     transition = Transition.objects.create(
         workflow_definition=wf,
@@ -192,7 +192,7 @@ def test_rule_assign_role_applies_to_created_task(user_and_client):
     instance = WorkflowInstance.objects.create(
         workflow_definition=wf,
         created_by=user,
-        metadata={"claim_value": 7000},
+        metadata_json={"claim_value": 7000},
     )
 
     response = client.post(

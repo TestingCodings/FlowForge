@@ -85,4 +85,4 @@ def evaluate_for_transition(instance, transition):
         transition=transition,
     )
     rules = list(scoped_rules) + list(transition_rules)
-    return evaluate_rules_via_service(rules, instance.metadata or {})
+    return evaluate_rules_via_service(rules, instance.metadata_json or {})

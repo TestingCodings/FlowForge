@@ -23,7 +23,8 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
             "updated_at",
-            "metadata",
+            "completed_at",
+            "metadata_json",
         )
         read_only_fields = (
             "id",
@@ -32,6 +33,7 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
             "updated_at",
+            "completed_at",
         )
 
     def create(self, validated_data):

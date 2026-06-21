@@ -1,17 +1,29 @@
-import re
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
 from apps.workflows.models import State, WorkflowDefinition
 
 
-def _workflow_prefix(name: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", name or "")
-    prefix = (cleaned[:3] or "WFF").upper()
-    return prefix.ljust(3, "X")
+def generate_reference_number(workflow_definition):
+    """
+    Thread-safe reference number generator using select_for_update().
+    Format: {PREFIX}-{YEAR}-{SEQUENCE:05d}  e.g. CLM-2026-00042
+    """
+    from django.utils import timezone
+
+    year = timezone.now().year
+    prefix = (workflow_definition.reference_prefix or "WFF").upper()[:10]
+
+    with transaction.atomic():
+        count = (
+            WorkflowInstance.objects.select_for_update()
+            .filter(workflow_definition=workflow_definition, created_at__year=year)
+            .count()
+        )
+        return f"{prefix}-{year}-{count + 1:05d}"
 
 
 class WorkflowInstance(models.Model):
@@ -30,7 +42,8 @@ class WorkflowInstance(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    metadata = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    metadata_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "workflow_instance"
@@ -51,17 +64,7 @@ class WorkflowInstance(models.Model):
             self.current_state = initial_state
 
         if not self.reference_number and self.workflow_definition_id:
-            from django.utils import timezone
-
-            year = timezone.now().year
-            sequence = (
-                WorkflowInstance.objects.filter(
-                    workflow_definition=self.workflow_definition,
-                    created_at__year=year,
-                ).count()
-                + 1
-            )
-            self.reference_number = f"{_workflow_prefix(self.workflow_definition.name)}-{year}-{sequence:05d}"
+            self.reference_number = generate_reference_number(self.workflow_definition)
 
         self.full_clean()
         super().save(*args, **kwargs)

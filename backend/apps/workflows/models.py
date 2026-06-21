@@ -9,8 +9,9 @@ class WorkflowDefinition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True)
+    reference_prefix = models.CharField(max_length=10, default="WFF")
     version = models.PositiveIntegerField(default=1)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -19,6 +20,7 @@ class WorkflowDefinition(models.Model):
         related_name="created_workflow_definitions",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "workflow_definition"
@@ -34,15 +36,14 @@ class State(models.Model):
         WorkflowDefinition, on_delete=models.CASCADE, related_name="states"
     )
     name = models.CharField(max_length=100)
-    display_name = models.CharField(max_length=150, blank=True)
+    display_name = models.CharField(max_length=200, blank=True)
     is_initial = models.BooleanField(default=False)
     is_terminal = models.BooleanField(default=False)
     position_order = models.PositiveIntegerField(default=1)
-    requires_task = models.BooleanField(default=True)
-    task_title = models.CharField(max_length=200, blank=True)
-    task_description = models.TextField(blank=True)
-    task_assigned_role = models.CharField(max_length=50, blank=True)
-    task_sla_hours = models.PositiveIntegerField(default=48)
+    # sla_config: {"sla_hours": 48, "sla_business_hours_only": false}
+    sla_config = models.JSONField(default=dict, blank=True)
+    # task_config: {"requires_task": true, "title_template": "...", "description": "...", "default_role": "handler"}
+    task_config = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "workflow_state"
@@ -61,6 +62,26 @@ class State(models.Model):
     def __str__(self):
         return f"{self.workflow_definition.name}: {self.name}"
 
+    @property
+    def requires_task(self):
+        return self.task_config.get("requires_task", True) and not self.is_terminal
+
+    @property
+    def task_title(self):
+        return self.task_config.get("title_template", "")
+
+    @property
+    def task_description(self):
+        return self.task_config.get("description", "")
+
+    @property
+    def task_assigned_role(self):
+        return self.task_config.get("default_role", "")
+
+    @property
+    def task_sla_hours(self):
+        return self.sla_config.get("sla_hours", 48)
+
 
 class Transition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -70,6 +91,7 @@ class Transition(models.Model):
     from_state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="outgoing_transitions")
     to_state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="incoming_transitions")
     name = models.CharField(max_length=150)
+    display_name = models.CharField(max_length=200, blank=True)
     requires_approval = models.BooleanField(default=False)
 
     class Meta:
@@ -77,7 +99,7 @@ class Transition(models.Model):
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
-                fields=["workflow_definition", "from_state", "to_state", "name"],
+                fields=["from_state", "to_state"],
                 name="unique_transition_per_path",
             )
         ]

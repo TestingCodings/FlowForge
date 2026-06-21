@@ -27,6 +27,7 @@ class WorkflowDefinitionFactory(factory.django.DjangoModelFactory):
 
     name = factory.Sequence(lambda n: f"Workflow {n}")
     description = "Generated workflow"
+    reference_prefix = "TST"
     version = 1
     is_active = True
     created_by = factory.SubFactory(UserFactory)
@@ -42,6 +43,8 @@ class StateFactory(factory.django.DjangoModelFactory):
     is_initial = False
     is_terminal = False
     position_order = factory.Sequence(lambda n: n + 1)
+    sla_config = factory.Dict({"sla_hours": 48})
+    task_config = factory.Dict({"requires_task": True})
 
 
 class TransitionFactory(factory.django.DjangoModelFactory):
@@ -52,6 +55,7 @@ class TransitionFactory(factory.django.DjangoModelFactory):
     from_state = factory.SubFactory(StateFactory, workflow_definition=factory.SelfAttribute("..workflow_definition"))
     to_state = factory.SubFactory(StateFactory, workflow_definition=factory.SelfAttribute("..workflow_definition"))
     name = factory.Sequence(lambda n: f"Transition-{n}")
+    display_name = ""
     requires_approval = False
 
 
@@ -61,7 +65,7 @@ class WorkflowInstanceFactory(factory.django.DjangoModelFactory):
 
     workflow_definition = factory.SubFactory(WorkflowDefinitionFactory)
     created_by = factory.SelfAttribute("workflow_definition.created_by")
-    metadata = factory.Dict({"seeded": True})
+    metadata_json = factory.Dict({"seeded": True})
 
     @factory.post_generation
     def ensure_initial_state(obj, create, extracted, **kwargs):

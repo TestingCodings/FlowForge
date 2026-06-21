@@ -33,9 +33,8 @@ def setup_task_workflow(db):
         is_initial=True,
         is_terminal=False,
         position_order=1,
-        requires_task=True,
-        task_assigned_role=RoleName.PARTICIPANT,
-        task_sla_hours=24,
+        task_config={"requires_task": True, "default_role": RoleName.PARTICIPANT},
+        sla_config={"sla_hours": 24},
     )
     review = State.objects.create(
         workflow_definition=wf,
@@ -43,7 +42,7 @@ def setup_task_workflow(db):
         is_initial=False,
         is_terminal=False,
         position_order=2,
-        requires_task=False,
+        task_config={"requires_task": False},
     )
     Transition.objects.create(
         workflow_definition=wf,
@@ -76,7 +75,7 @@ class TestTasksApi:
 
         create_instance = client.post(
             "/api/instances/",
-            {"workflow_definition": str(wf.id), "metadata": {"claim": "A-123"}},
+            {"workflow_definition": str(wf.id), "metadata_json": {"claim": "A-123"}},
             format="json",
         )
         assert create_instance.status_code == status.HTTP_201_CREATED

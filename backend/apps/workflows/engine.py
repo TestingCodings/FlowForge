@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from django.db import transaction
+from django.utils import timezone
+
 from apps.workflows.models import Transition
 from apps.workflows.rules import evaluate_for_transition
 
@@ -37,8 +40,16 @@ def validate_transition(instance, transition_id):
     return TransitionResult(transition=transition, actions=actions)
 
 
+@transaction.atomic
 def perform_transition(instance, transition_id):
     result = validate_transition(instance, transition_id)
+
+    update_fields = ["current_state", "updated_at"]
     instance.current_state = result.transition.to_state
-    instance.save(update_fields=["current_state", "updated_at"])
+
+    if result.transition.to_state.is_terminal and instance.completed_at is None:
+        instance.completed_at = timezone.now()
+        update_fields.append("completed_at")
+
+    instance.save(update_fields=update_fields)
     return result
