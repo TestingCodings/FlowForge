@@ -8,6 +8,7 @@ import InstanceDetailPage from "./pages/InstanceDetailPage";
 import InstancesPage from "./pages/InstancesPage";
 import LoginPage from "./pages/LoginPage";
 import NewWorkflowPage from "./pages/NewWorkflowPage";
+import WorkflowBuilderPage from "./pages/WorkflowBuilderPage";
 import RegisterPage from "./pages/RegisterPage";
 import UsersPage from "./pages/UsersPage";
 import WorkflowDetailPage from "./pages/WorkflowDetailPage";
@@ -30,7 +31,8 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="workflows" element={<WorkflowsPage />} />
-        <Route path="workflows/new" element={<NewWorkflowPage />} />
+        <Route path="workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="workflows/templates" element={<NewWorkflowPage />} />
         <Route path="workflows/:id" element={<WorkflowDetailPage />} />
         <Route path="instances" element={<InstancesPage />} />
         <Route path="instances/:id" element={<InstanceDetailPage />} />
