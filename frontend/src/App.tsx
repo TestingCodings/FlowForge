@@ -34,6 +34,7 @@ export default function App() {
         <Route path="workflows/:id" element={<WorkflowDetailPage />} />
         <Route path="instances" element={<InstancesPage />} />
         <Route path="instances/:id" element={<InstanceDetailPage />} />
+        <Route path="tasks" element={<DashboardPage />} />
         <Route path="admin/audit" element={<AuditPage />} />
         <Route path="admin/users" element={<UsersPage />} />
       </Route>

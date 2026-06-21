@@ -60,3 +60,8 @@ frontend/.env
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+backend/dev.sqlite3
+backend/test_db.sqlite3
+backend/create_demo_data.py
+repair_windows_for_docker.ps1
