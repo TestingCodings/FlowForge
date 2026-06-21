@@ -154,10 +154,19 @@ export default function StateGraph({
 
         {/* ── Edges ── */}
         {edges.map(e => {
-          const status = stateStatus(e.fromState);
-          const stroke = status === "completed" ? "#3fb950" : status === "active" ? "#6366f1" : "#30363d";
-          const markerId = status === "completed" ? "arr-done" : status === "active" ? "arr-active" : "arr-pending";
-          const opacity = status === "pending" ? 0.35 : 1;
+          const fromStatus = stateStatus(e.fromState);
+          const toStatus   = stateStatus(e.toState);
+          // An edge is green only when both endpoints were actually visited.
+          // completed→active = the edge that was just taken to reach the current state.
+          // completed→pending = a branch that was never taken (grey).
+          const edgeStatus =
+            fromStatus === "completed" && toStatus === "completed" ? "completed"
+            : fromStatus === "completed" && toStatus === "active"  ? "completed"
+            : fromStatus === "active"                              ? "active"
+            : "pending";
+          const stroke    = edgeStatus === "completed" ? "#3fb950" : edgeStatus === "active" ? "#6366f1" : "#30363d";
+          const markerId  = edgeStatus === "completed" ? "arr-done" : edgeStatus === "active" ? "arr-active" : "arr-pending";
+          const opacity   = edgeStatus === "pending" ? 0.35 : 1;
 
           // Start from right-center of source, end at left-center of target
           const x1 = e.from.x + NODE_W;
@@ -196,7 +205,7 @@ export default function StateGraph({
               <path d={d} fill="none" stroke={stroke} strokeWidth={1.5}
                 markerEnd={`url(#${markerId})`} opacity={opacity} />
               <text x={lx} y={ly} textAnchor="middle" fontSize="9"
-                fill={stroke} opacity={opacity * 0.85}>
+                fill={edgeStatus === "pending" ? "#555d69" : stroke} opacity={edgeStatus === "pending" ? 0.5 : 0.85}>
                 {e.name}
               </text>
             </g>
