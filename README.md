@@ -100,12 +100,13 @@ If the rules service is not running, the backend automatically falls back to the
 
 ## Demo Credentials
 
-| Email | Password | Role |
-|---|---|---|
-| admin@flowforge.dev | Admin1234! | platform_admin |
-| alice@flowforge.dev | Alice1234! | approver |
-| bob@flowforge.dev | Bob12345! | participant |
-| carol@flowforge.dev | Carol123! | approver |
+Run the seed command — it prints all credentials on completion:
+
+```bash
+python manage.py seed --settings=config.settings.local_sqlite
+```
+
+Four demo users are created across the role spectrum (platform_admin, approver, participant). Credentials are intentionally not published here.
 
 ---
 
@@ -134,14 +135,14 @@ New Claim → [Submit Claim] → Under Review ──[Approve Standard*]──→
 
 ## 5-Minute Interactive Demo
 
-1. Log in as `admin@flowforge.dev`
+1. Log in with the platform_admin account printed by the seed command
 2. Open **Workflows → Insurance Claim** — inspect the state graph and the blocking rule
 3. Click **+ New CLM** to create a fresh instance
 4. On the instance page, click **Edit** in the Metadata panel and add `claim_value = 15000`
 5. Try **Approve Standard** — the rule blocks it with the configured message
 6. Click **Escalate** → then **Director Approve** to resolve the claim
 7. Add a comment at any point — it appears in the Timeline
-8. Switch to **bob@flowforge.dev** (participant) — the approval transitions are grayed out
+8. Log in as the participant account — the approval transitions are grayed out
 
 ---
 
