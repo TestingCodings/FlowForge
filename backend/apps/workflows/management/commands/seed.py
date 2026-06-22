@@ -86,26 +86,172 @@ CLAIM_WORKFLOW = {
 }
 
 
+TESTRAIL_WORKFLOWS = [
+    {
+        "name": "Test Run",
+        "prefix": "TRN",
+        "description": "A test execution run against a specific build. Tracks overall pass/fail status and blocks release if failures exist.",
+        "states": [
+            {"name": "Planning",    "display_name": "Planning",    "is_initial": True,  "is_terminal": False, "position_order": 1,
+             "task_config": {"requires_task": True,  "title_template": "Define scope and assign test cases", "default_role": "workflow_designer"}, "sla_config": {"sla_hours": 24}},
+            {"name": "In Progress", "display_name": "In Progress", "is_initial": False, "is_terminal": False, "position_order": 2,
+             "task_config": {"requires_task": True,  "title_template": "Execute test cases and record results", "default_role": "participant"},   "sla_config": {"sla_hours": 72}},
+            {"name": "Passed",      "display_name": "Passed",      "is_initial": False, "is_terminal": True,  "position_order": 3,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+            {"name": "Failed",      "display_name": "Failed",      "is_initial": False, "is_terminal": True,  "position_order": 4,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+            {"name": "Blocked",     "display_name": "Blocked",     "is_initial": False, "is_terminal": True,  "position_order": 5,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+        ],
+        "transitions": [
+            {"name": "Start Run",       "from": "Planning",    "to": "In Progress"},
+            {"name": "Mark Passed",     "from": "In Progress", "to": "Passed",      "requires_approval": True},
+            {"name": "Mark Failed",     "from": "In Progress", "to": "Failed"},
+            {"name": "Mark Blocked",    "from": "In Progress", "to": "Blocked"},
+            {"name": "Reopen",          "from": "Failed",      "to": "In Progress"},
+            {"name": "Reopen Blocked",  "from": "Blocked",     "to": "In Progress"},
+        ],
+        "rules": [
+            {
+                "transition": "Mark Passed",
+                "condition": {"field": "fail_count", "operator": "gt", "value": 0},
+                "action": {"type": "block_transition", "reason": "This run has recorded failures. Resolve all failed test cases before marking the run as Passed."},
+                "priority": 1,
+            },
+            {
+                "transition": "Mark Passed",
+                "condition": {"field": "block_count", "operator": "gt", "value": 0},
+                "action": {"type": "block_transition", "reason": "This run has blocked test cases. Unblock or remove them before closing as Passed."},
+                "priority": 2,
+            },
+        ],
+        "instances": [
+            {"creator": "alice@flowforge.dev", "meta": {"suite": "Authentication",  "build": "v2.4.1", "environment": "Staging",    "total_cases": 24, "fail_count": 0, "block_count": 0}, "advance": ["Start Run", "Mark Passed"]},
+            {"creator": "bob@flowforge.dev",   "meta": {"suite": "Checkout Flow",   "build": "v2.4.1", "environment": "Staging",    "total_cases": 18, "fail_count": 3, "block_count": 0}, "advance": ["Start Run"]},
+            {"creator": "alice@flowforge.dev", "meta": {"suite": "API Regression",  "build": "v2.4.0", "environment": "Production", "total_cases": 56, "fail_count": 0, "block_count": 2}, "advance": ["Start Run", "Mark Blocked"]},
+            {"creator": "bob@flowforge.dev",   "meta": {"suite": "Smoke Tests",     "build": "v2.4.1", "environment": "UAT",        "total_cases": 8,  "fail_count": 0, "block_count": 0}, "advance": ["Start Run"]},
+        ],
+    },
+    {
+        "name": "Bug Report",
+        "prefix": "BUG",
+        "description": "Defect lifecycle from discovery through to verified fix. Raised from failed test runs.",
+        "states": [
+            {"name": "New",         "display_name": "New",         "is_initial": True,  "is_terminal": False, "position_order": 1,
+             "task_config": {"requires_task": True,  "title_template": "Triage and assign bug", "default_role": "approver"},      "sla_config": {"sla_hours": 4}},
+            {"name": "In Progress", "display_name": "In Progress", "is_initial": False, "is_terminal": False, "position_order": 2,
+             "task_config": {"requires_task": True,  "title_template": "Investigate and fix",   "default_role": "participant"},   "sla_config": {"sla_hours": 48}},
+            {"name": "In Review",   "display_name": "In Review",   "is_initial": False, "is_terminal": False, "position_order": 3,
+             "task_config": {"requires_task": True,  "title_template": "Code review and QA sign-off", "default_role": "approver"}, "sla_config": {"sla_hours": 24}},
+            {"name": "Fixed",       "display_name": "Fixed",       "is_initial": False, "is_terminal": True,  "position_order": 4,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+            {"name": "Won't Fix",   "display_name": "Won't Fix",   "is_initial": False, "is_terminal": True,  "position_order": 5,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+            {"name": "Duplicate",   "display_name": "Duplicate",   "is_initial": False, "is_terminal": True,  "position_order": 6,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+        ],
+        "transitions": [
+            {"name": "Assign",        "from": "New",         "to": "In Progress"},
+            {"name": "Mark Duplicate","from": "New",         "to": "Duplicate"},
+            {"name": "Won't Fix",     "from": "New",         "to": "Won't Fix",   "requires_approval": True},
+            {"name": "Submit Review", "from": "In Progress", "to": "In Review"},
+            {"name": "Reopen",        "from": "In Progress", "to": "New"},
+            {"name": "Approve Fix",   "from": "In Review",   "to": "Fixed",       "requires_approval": True},
+            {"name": "Reject Fix",    "from": "In Review",   "to": "In Progress"},
+        ],
+        "rules": [
+            {
+                "transition": "Approve Fix",
+                "condition": {"field": "severity", "operator": "eq", "value": "critical"},
+                "action": {"type": "assign_role", "role": "approver"},
+                "priority": 1,
+            },
+        ],
+        "instances": [
+            {"creator": "bob@flowforge.dev",   "meta": {"title": "Login fails with SSO on Safari", "severity": "critical", "reported_in": "TRN-2026-00002", "component": "Auth"}, "advance": ["Assign"]},
+            {"creator": "bob@flowforge.dev",   "meta": {"title": "Cart total rounds incorrectly",  "severity": "high",     "reported_in": "TRN-2026-00002", "component": "Checkout"}, "advance": ["Assign", "Submit Review"]},
+            {"creator": "alice@flowforge.dev", "meta": {"title": "Tooltip misaligned on mobile",   "severity": "low",      "reported_in": "TRN-2026-00001", "component": "UI"}, "advance": ["Won't Fix"]},
+            {"creator": "bob@flowforge.dev",   "meta": {"title": "API 500 on concurrent checkout", "severity": "critical", "reported_in": "TRN-2026-00002", "component": "API"}, "advance": ["Assign", "Submit Review", "Approve Fix"]},
+        ],
+    },
+    {
+        "name": "Release",
+        "prefix": "REL",
+        "description": "Software release gate. Blocks deployment if open critical bugs or failing test runs exist.",
+        "states": [
+            {"name": "Draft",      "display_name": "Draft",      "is_initial": True,  "is_terminal": False, "position_order": 1,
+             "task_config": {"requires_task": True,  "title_template": "Prepare release notes and changelog", "default_role": "workflow_designer"}, "sla_config": {"sla_hours": 8}},
+            {"name": "QA Sign-off","display_name": "QA Sign-off","is_initial": False, "is_terminal": False, "position_order": 2,
+             "task_config": {"requires_task": True,  "title_template": "QA lead: confirm all runs passed",    "default_role": "approver"},          "sla_config": {"sla_hours": 4}},
+            {"name": "Approved",   "display_name": "Approved",   "is_initial": False, "is_terminal": False, "position_order": 3,
+             "task_config": {"requires_task": True,  "title_template": "Engineering lead: approve deployment", "default_role": "approver"},         "sla_config": {"sla_hours": 2}},
+            {"name": "Deployed",   "display_name": "Deployed",   "is_initial": False, "is_terminal": True,  "position_order": 4,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+            {"name": "Rolled Back","display_name": "Rolled Back","is_initial": False, "is_terminal": True,  "position_order": 5,
+             "task_config": {"requires_task": False}, "sla_config": {}},
+        ],
+        "transitions": [
+            {"name": "Submit for QA",   "from": "Draft",       "to": "QA Sign-off"},
+            {"name": "QA Approve",      "from": "QA Sign-off", "to": "Approved",    "requires_approval": True},
+            {"name": "QA Reject",       "from": "QA Sign-off", "to": "Draft"},
+            {"name": "Approve Deploy",  "from": "Approved",    "to": "Deployed",    "requires_approval": True},
+            {"name": "Reject Deploy",   "from": "Approved",    "to": "Draft"},
+            {"name": "Roll Back",       "from": "Deployed",    "to": "Rolled Back"},
+        ],
+        "rules": [
+            {
+                "transition": "QA Approve",
+                "condition": {"field": "open_critical_bugs", "operator": "gt", "value": 0},
+                "action": {"type": "block_transition", "reason": "Open critical bugs must be resolved before QA sign-off."},
+                "priority": 1,
+            },
+            {
+                "transition": "QA Approve",
+                "condition": {"field": "failing_runs", "operator": "gt", "value": 0},
+                "action": {"type": "block_transition", "reason": "All test runs must be in Passed state before QA sign-off."},
+                "priority": 2,
+            },
+        ],
+        "instances": [
+            {"creator": "alice@flowforge.dev", "meta": {"version": "v2.4.0", "environment": "Production", "open_critical_bugs": 0, "failing_runs": 0, "release_notes": "Performance improvements and bug fixes"}, "advance": ["Submit for QA", "QA Approve", "Approve Deploy"]},
+            {"creator": "alice@flowforge.dev", "meta": {"version": "v2.4.1", "environment": "Production", "open_critical_bugs": 2, "failing_runs": 1, "release_notes": "SSO fix, cart rounding fix"}, "advance": ["Submit for QA"]},
+        ],
+    },
+]
+
+ALL_TESTRAIL_NAMES = [w["name"] for w in TESTRAIL_WORKFLOWS]
+
+
 class Command(BaseCommand):
     help = "Seed FlowForge with demo workflows and instances."
 
     def add_arguments(self, parser):
-        parser.add_argument("--reset", action="store_true", help="Delete existing demo data before seeding")
-        parser.add_argument("--quiet", action="store_true", help="Suppress per-row output")
+        parser.add_argument("--reset",    action="store_true", help="Delete existing demo data before seeding")
+        parser.add_argument("--quiet",    action="store_true", help="Suppress per-row output")
+        parser.add_argument("--testrail", action="store_true", help="Also seed TestRail-replacement example workflows")
 
     def handle(self, *args, **options):
-        quiet = options["quiet"]
+        quiet    = options["quiet"]
+        testrail = options["testrail"]
 
         if options["reset"]:
             self.stdout.write(self.style.WARNING("Resetting demo data..."))
-            WorkflowInstance.objects.filter(workflow_definition__name__in=[LEAVE_WORKFLOW["name"], CLAIM_WORKFLOW["name"]]).delete()
-            WorkflowDefinition.objects.filter(name__in=[LEAVE_WORKFLOW["name"], CLAIM_WORKFLOW["name"]]).delete()
+            names = [LEAVE_WORKFLOW["name"], CLAIM_WORKFLOW["name"]]
+            if testrail:
+                names += ALL_TESTRAIL_NAMES
+            WorkflowInstance.objects.filter(workflow_definition__name__in=names).delete()
+            WorkflowDefinition.objects.filter(name__in=names).delete()
             for spec in DEMO_USERS:
                 User.objects.filter(email=spec["email"]).delete()
 
         self._seed_users(quiet)
         self._seed_workflow(LEAVE_WORKFLOW, quiet)
         self._seed_workflow(CLAIM_WORKFLOW, quiet)
+
+        if testrail:
+            self.stdout.write(self.style.HTTP_INFO("\nSeeding TestRail-replacement workflows..."))
+            for wf_spec in TESTRAIL_WORKFLOWS:
+                self._seed_workflow(wf_spec, quiet)
 
         self.stdout.write(self.style.SUCCESS("\nSeed complete."))
         self.stdout.write("")

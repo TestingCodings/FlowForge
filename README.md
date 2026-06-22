@@ -20,7 +20,8 @@ A configurable workflow automation platform built as a portfolio project. Define
 | **Inline Rule Builder** | Condition preview (`IF claim_value gt 10000`), action preview, operator reference — all on the Workflow Detail page |
 | **Users Page** | Manage user roles inline; role legend with capability matrix |
 | **User Guide** | In-app help page with 5-minute walkthrough, operator reference, FAQ |
-| **Seed Command** | `python manage.py seed --reset` — idempotent demo data with full audit trails |
+| **Dashboard Charts** | Activity area chart (created vs completed, last 14 days), instances-by-state horizontal bar, active/completed stacked bar by workflow |
+| **Seed Command** | `python manage.py seed --reset` — idempotent demo data with full audit trails; add `--testrail` for the test-management workflow set |
 
 ---
 
@@ -120,6 +121,20 @@ Draft → [Submit] → Manager Review → [Approve*] → Approved
 ```
 `*` requires approver role
 
+### Test Management (TRN / BUG / REL) — `--testrail`
+
+Three linked workflows that turn FlowForge into a TestRail replacement:
+
+- **Test Run (TRN)** — plan → in progress → passed/failed/blocked. Rules block "Mark Passed" if `fail_count > 0` or `block_count > 0`
+- **Bug Report (BUG)** — new → in progress → in review → fixed/won't fix/duplicate. Cross-referenced to the failing test run via `reported_in` metadata
+- **Release (REL)** — draft → QA sign-off → approved → deployed/rolled back. Rules block QA sign-off if `open_critical_bugs > 0` or `failing_runs > 0`
+
+```bash
+python manage.py seed --testrail --settings=config.settings.local_sqlite
+```
+
+---
+
 ### Insurance Claim (CLM)
 6 states · 7 transitions · branching with value-based escalation rule
 
@@ -187,7 +202,7 @@ FlowForge/
 
 ## Roadmap
 
-- [ ] Dashboard analytics charts (instances by state, completion rate over time)
+- [x] Dashboard analytics charts (instances by state, completion rate over time)
 - [ ] Multi-user demo switcher in the header
 - [ ] SLA breach indicators on overdue instances
 - [ ] Workflow versioning — publish new versions, migrate open instances
