@@ -55,6 +55,7 @@ export default function WorkflowDetailPage() {
   const [ruleError, setRuleError] = useState("");
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [versionMsg, setVersionMsg] = useState<string | null>(null);
 
   /* ─── Queries ─── */
   const { data: wf, isLoading } = useQuery<Workflow>({
@@ -125,6 +126,24 @@ export default function WorkflowDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workflow", id] }),
   });
 
+  const publishNewVersion = useMutation({
+    mutationFn: async () =>
+      (await apiClient.post(`/workflows/${id}/publish-new-version/`)).data,
+    onSuccess: (newWf) => {
+      qc.invalidateQueries({ queryKey: ["workflow", id] });
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["versionHistory", id] });
+      setVersionMsg(`v${newWf.version} draft created — "${newWf.name}"`);
+      setTimeout(() => setVersionMsg(null), 5000);
+    },
+  });
+
+  const { data: versionHistory = [] } = useQuery<Workflow[]>({
+    queryKey: ["versionHistory", id],
+    queryFn: async () => (await apiClient.get(`/workflows/${id}/version-history/`)).data,
+    enabled: Boolean(id),
+  });
+
   /* ─── Loading / not found ─── */
   if (isLoading) {
     return (
@@ -158,7 +177,17 @@ export default function WorkflowDetailPage() {
           <span className={`badge ${wf.is_active ? "badge-active" : "badge-inactive"}`}>
             {wf.is_active ? "Active" : "Inactive"}
           </span>
-          <span className="badge badge-inactive">v{wf.version}</span>
+          <span className="badge badge-inactive">
+            v{wf.version}{wf.published_at ? "" : " · draft"}
+          </span>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => publishNewVersion.mutate()}
+            disabled={publishNewVersion.isPending}
+            title="Stamp this version as published and create a v+1 draft"
+          >
+            {publishNewVersion.isPending ? "Creating…" : "Publish new version"}
+          </button>
         </div>
       </div>
 
@@ -505,6 +534,64 @@ export default function WorkflowDetailPage() {
           </details>
         )}
       </div>
+
+      {/* ── Version history ── */}
+      {versionHistory.length > 1 && (
+        <div className="card mt-4">
+          <div className="card-header">
+            <h3>Version history</h3>
+            <span className="badge badge-inactive">{versionHistory.length} versions</span>
+          </div>
+          {versionMsg && <div className="alert alert-success mb-3">{versionMsg}</div>}
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Published</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...versionHistory].reverse().map((v) => (
+                <tr key={v.id} style={v.id === id ? { background: "rgba(99,102,241,0.06)" } : undefined}>
+                  <td>
+                    <span className="badge badge-inactive" style={{ fontFamily: "monospace" }}>v{v.version}</span>
+                  </td>
+                  <td style={{ fontWeight: v.id === id ? 600 : 400 }}>
+                    {v.name}
+                    {v.id === id && <span className="text-muted text-xs" style={{ marginLeft: 6 }}>← current</span>}
+                  </td>
+                  <td>
+                    <span className={`badge ${v.is_active ? "badge-active" : "badge-inactive"}`}>
+                      {v.is_active ? "Active" : v.published_at ? "Archived" : "Draft"}
+                    </span>
+                  </td>
+                  <td className="text-muted text-sm">
+                    {v.published_at
+                      ? new Date(v.published_at).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td>
+                    {v.id !== id && (
+                      <Link
+                        to={`/workflows/${v.id}`}
+                        style={{ fontSize: "0.78rem", color: "var(--accent-light)" }}
+                      >
+                        View →
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {versionMsg && versionHistory.length <= 1 && (
+        <div className="alert alert-success mt-3">{versionMsg}</div>
+      )}
     </div>
   );
 }

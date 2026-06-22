@@ -59,12 +59,21 @@ export interface Workflow {
   description: string;
   reference_prefix: string;
   version: number;
+  published_at: string | null;
+  parent: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   states: State[];
   transitions: Transition[];
   rules: Rule[];
+}
+
+export interface SlaInfo {
+  status: "ok" | "warning" | "breached";
+  sla_hours: number;
+  elapsed_hours: number;
+  entered_at: string;
 }
 
 export interface WorkflowInstance {
@@ -79,6 +88,7 @@ export interface WorkflowInstance {
   created_at: string;
   updated_at: string;
   created_by: string;
+  sla: SlaInfo | null;
 }
 
 export interface AuditEntry {

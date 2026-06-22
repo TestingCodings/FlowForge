@@ -2,7 +2,27 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
-import { WorkflowInstance, Workflow } from "../types/api";
+import { WorkflowInstance, Workflow, SlaInfo } from "../types/api";
+
+function SlaBadge({ sla }: { sla: SlaInfo | null | undefined }) {
+  if (!sla || sla.status === "ok") return null;
+  const isBreached = sla.status === "breached";
+  return (
+    <span
+      title={`SLA ${isBreached ? "breached" : "warning"}: ${sla.elapsed_hours}h / ${sla.sla_hours}h`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 3,
+        fontSize: "0.7rem", fontWeight: 700, padding: "1px 6px",
+        borderRadius: 99, marginLeft: 6,
+        background: isBreached ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
+        color: isBreached ? "#f87171" : "#fbbf24",
+        border: `1px solid ${isBreached ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`,
+      }}
+    >
+      ⏱ {isBreached ? "OVERDUE" : "DUE SOON"}
+    </span>
+  );
+}
 
 export default function InstancesPage() {
   const qc = useQueryClient();
@@ -105,15 +125,22 @@ export default function InstancesPage() {
                 <th>Reference</th>
                 <th>Workflow</th>
                 <th>Current State</th>
+                <th>SLA</th>
                 <th>Status</th>
                 <th>Created</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((inst) => {
-                const completed = Boolean((inst as any).completed_at);
+                const completed = Boolean(inst.completed_at);
+                const sla = inst.sla;
+                const rowStyle = sla?.status === "breached"
+                  ? { background: "rgba(239,68,68,0.04)" }
+                  : sla?.status === "warning"
+                  ? { background: "rgba(245,158,11,0.04)" }
+                  : undefined;
                 return (
-                  <tr key={inst.id}>
+                  <tr key={inst.id} style={rowStyle}>
                     <td>
                       <Link to={`/instances/${inst.id}`} style={{ fontFamily: "monospace", fontSize: "0.875rem" }}>
                         {inst.reference_number}
@@ -126,12 +153,19 @@ export default function InstancesPage() {
                       </span>
                     </td>
                     <td>
+                      {!completed && sla ? (
+                        <SlaBadge sla={sla} />
+                      ) : (
+                        <span className="text-muted text-xs">—</span>
+                      )}
+                    </td>
+                    <td>
                       <span className={`badge ${completed ? "badge-inactive" : "badge-active"}`}>
                         {completed ? "Completed" : "In Progress"}
                       </span>
                     </td>
                     <td className="text-muted text-sm">
-                      {new Date((inst as any).created_at).toLocaleDateString()}
+                      {new Date(inst.created_at).toLocaleDateString()}
                     </td>
                   </tr>
                 );

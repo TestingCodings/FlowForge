@@ -62,6 +62,8 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "description",
             "reference_prefix",
             "version",
+            "published_at",
+            "parent",
             "is_active",
             "created_by",
             "created_at",

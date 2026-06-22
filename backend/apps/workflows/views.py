@@ -1,5 +1,10 @@
-from rest_framework import viewsets
+import uuid
+
+from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import Rule, State, Transition, WorkflowDefinition
 from .serializers import (
@@ -12,13 +17,99 @@ from .serializers import (
 
 
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
-    queryset = WorkflowDefinition.objects.all().prefetch_related("states", "transitions")
+    queryset = WorkflowDefinition.objects.all().prefetch_related("states", "transitions", "rules")
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action == "create":
             return WorkflowDefinitionCreateSerializer
         return WorkflowDefinitionSerializer
+
+    @action(detail=True, methods=["post"], url_path="publish-new-version")
+    def publish_new_version(self, request, pk=None):
+        """
+        Mark the current version as published (sets published_at) and create a
+        draft clone at version+1 with all states, transitions, and rules copied.
+        Returns the new draft workflow definition.
+        """
+        original = self.get_object()
+
+        # Stamp published_at on the original if not already set
+        if not original.published_at:
+            original.published_at = timezone.now()
+            original.save(update_fields=["published_at"])
+
+        # Create the new draft
+        new_wf = WorkflowDefinition.objects.create(
+            name=f"{original.name} (v{original.version + 1} draft)",
+            description=original.description,
+            reference_prefix=original.reference_prefix,
+            version=original.version + 1,
+            is_active=False,
+            published_at=None,
+            parent=original,
+            created_by=request.user,
+        )
+
+        # Clone states, keeping a map old_state_id → new_state
+        state_map = {}
+        for state in original.states.all():
+            new_state = State.objects.create(
+                workflow_definition=new_wf,
+                name=state.name,
+                display_name=state.display_name,
+                is_initial=state.is_initial,
+                is_terminal=state.is_terminal,
+                position_order=state.position_order,
+                sla_config=state.sla_config,
+                task_config=state.task_config,
+            )
+            state_map[str(state.id)] = new_state
+
+        # Clone transitions
+        transition_map = {}
+        for tr in original.transitions.all():
+            new_tr = Transition.objects.create(
+                workflow_definition=new_wf,
+                from_state=state_map[str(tr.from_state_id)],
+                to_state=state_map[str(tr.to_state_id)],
+                name=tr.name,
+                display_name=tr.display_name,
+                requires_approval=tr.requires_approval,
+            )
+            transition_map[str(tr.id)] = new_tr
+
+        # Clone rules
+        for rule in original.rules.all():
+            Rule.objects.create(
+                workflow_definition=new_wf,
+                transition=transition_map[str(rule.transition_id)] if rule.transition_id else None,
+                condition=rule.condition,
+                action=rule.action,
+                priority=rule.priority,
+            )
+
+        return Response(WorkflowDefinitionSerializer(new_wf).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="version-history")
+    def version_history(self, request, pk=None):
+        """Return all versions in the chain (ancestors + self + descendants)."""
+        wf = self.get_object()
+
+        # Walk up to root
+        root = wf
+        while root.parent_id:
+            root = root.parent
+
+        # BFS down from root
+        versions = []
+        queue = [root]
+        while queue:
+            current = queue.pop(0)
+            versions.append(current)
+            queue.extend(current.child_versions.all())
+
+        return Response(WorkflowDefinitionSerializer(versions, many=True).data)
 
 
 class StateViewSet(viewsets.ModelViewSet):

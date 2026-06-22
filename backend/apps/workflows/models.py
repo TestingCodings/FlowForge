@@ -11,6 +11,14 @@ class WorkflowDefinition(models.Model):
     description = models.TextField(blank=True)
     reference_prefix = models.CharField(max_length=10, default="WFF")
     version = models.PositiveIntegerField(default=1)
+    published_at = models.DateTimeField(null=True, blank=True)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="child_versions",
+    )
     is_active = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
