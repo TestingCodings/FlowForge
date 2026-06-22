@@ -6,6 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.permissions import IsViewer, IsWorkflowDesigner, ReadOnlyOrParticipant, require_min_role
+
 from .models import Rule, State, Transition, WorkflowDefinition
 from .serializers import (
     RuleSerializer,
@@ -18,12 +20,25 @@ from .serializers import (
 
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     queryset = WorkflowDefinition.objects.all().prefetch_related("states", "transitions", "rules")
-    permission_classes = [IsAuthenticated]
+    # Reads: viewer+. Writes: workflow_designer+.
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get_serializer_class(self):
         if self.action == "create":
             return WorkflowDefinitionCreateSerializer
         return WorkflowDefinitionSerializer
+
+    def create(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="create a workflow definition")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="edit a workflow definition")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="delete a workflow definition")
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], url_path="publish-new-version")
     def publish_new_version(self, request, pk=None):
@@ -32,6 +47,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         draft clone at version+1 with all states, transitions, and rules copied.
         Returns the new draft workflow definition.
         """
+        require_min_role(request.user, "workflow_designer", action="publish a new workflow version")
         original = self.get_object()
 
         # Stamp published_at on the original if not already set
@@ -127,4 +143,17 @@ class TransitionViewSet(viewsets.ModelViewSet):
 class RuleViewSet(viewsets.ModelViewSet):
     queryset = Rule.objects.select_related("workflow_definition", "transition").all()
     serializer_class = RuleSerializer
-    permission_classes = [IsAuthenticated]
+    # Rules are config — workflow_designer+ for all writes, viewer+ for reads
+    permission_classes = [IsAuthenticated, IsViewer]
+
+    def create(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="create a rule")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="edit a rule")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="delete a rule")
+        return super().destroy(request, *args, **kwargs)

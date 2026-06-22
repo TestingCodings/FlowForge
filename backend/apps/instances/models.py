@@ -7,6 +7,43 @@ from django.db import models, transaction
 from apps.workflows.models import State, WorkflowDefinition
 
 
+class InstanceRelationship(models.Model):
+    """Directional link between two workflow instances (e.g. Bug 'reported_in' Test Run)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    from_instance = models.ForeignKey(
+        "WorkflowInstance", on_delete=models.CASCADE, related_name="outgoing_relationships"
+    )
+    to_instance = models.ForeignKey(
+        "WorkflowInstance", on_delete=models.CASCADE, related_name="incoming_relationships"
+    )
+    rel_type = models.CharField(max_length=100)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_relationships",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "instance_relationship"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["from_instance", "to_instance", "rel_type"],
+                name="unique_relationship",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.from_instance.reference_number}"
+            f" –[{self.rel_type}]→ "
+            f"{self.to_instance.reference_number}"
+        )
+
+
 def generate_reference_number(workflow_definition):
     """
     Thread-safe reference number generator using select_for_update().

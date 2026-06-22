@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
-import { WorkflowInstance, Transition, AuditEntry, UserProfile } from "../types/api";
+import {
+  WorkflowInstance, Transition, AuditEntry, UserProfile,
+  InstanceRelationship, InstanceSearchResult,
+} from "../types/api";
 import StateGraph from "../components/StateGraph";
 
 /* ─── Role capability helpers ─── */
@@ -37,6 +40,15 @@ export default function InstanceDetailPage() {
   const [metaRows, setMetaRows]         = useState<Array<{ key: string; value: string }>>([]);
   const [metaSaveErr, setMetaSaveErr]   = useState<string | null>(null);
   const [metaSaveOk, setMetaSaveOk]     = useState(false);
+
+  // Relationship link form state
+  const [linkQuery, setLinkQuery]       = useState("");
+  const [linkResults, setLinkResults]   = useState<InstanceSearchResult[]>([]);
+  const [linkTarget, setLinkTarget]     = useState<InstanceSearchResult | null>(null);
+  const [linkType, setLinkType]         = useState("");
+  const [linkNotes, setLinkNotes]       = useState("");
+  const [linkErr, setLinkErr]           = useState<string | null>(null);
+  const [showLinkForm, setShowLinkForm] = useState(false);
 
   /* ── Queries ── */
   const { data: me } = useQuery<UserProfile>({
@@ -125,6 +137,35 @@ export default function InstanceDetailPage() {
     onError: (err: any) =>
       setCommentErr(err?.response?.data?.detail ?? "Failed to post comment"),
   });
+
+  const linkMutation = useMutation({
+    mutationFn: async (payload: { to_instance: string; rel_type: string; notes: string }) =>
+      (await apiClient.post(`/instances/${id}/link/`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["instance", id] });
+      qc.invalidateQueries({ queryKey: ["audit-trail", id] });
+      setLinkTarget(null); setLinkQuery(""); setLinkResults([]);
+      setLinkType(""); setLinkNotes(""); setLinkErr(null);
+      setShowLinkForm(false);
+    },
+    onError: (err: any) => setLinkErr(err?.response?.data?.detail ?? "Failed to create link"),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (relId: string) =>
+      apiClient.delete(`/instances/${id}/link/${relId}/`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["instance", id] });
+      qc.invalidateQueries({ queryKey: ["audit-trail", id] });
+    },
+  });
+
+  const searchInstances = useCallback(async (q: string) => {
+    setLinkQuery(q);
+    if (q.length < 2) { setLinkResults([]); return; }
+    const res = await apiClient.get(`/instances/search/?q=${encodeURIComponent(q)}`);
+    setLinkResults((res.data as InstanceSearchResult[]).filter(r => r.id !== id));
+  }, [id]);
 
   // Start editing: populate rows from current metadata
   const startEdit = () => {
@@ -446,6 +487,31 @@ export default function InstanceDetailPage() {
         </div>
       </div>
 
+      {/* ── Relationships ── */}
+      <RelationshipsPanel
+        instance={instance}
+        myRoles={myRoles}
+        showLinkForm={showLinkForm}
+        setShowLinkForm={setShowLinkForm}
+        linkQuery={linkQuery}
+        linkResults={linkResults}
+        linkTarget={linkTarget}
+        setLinkTarget={setLinkTarget}
+        linkType={linkType}
+        setLinkType={setLinkType}
+        linkNotes={linkNotes}
+        setLinkNotes={setLinkNotes}
+        linkErr={linkErr}
+        onSearch={searchInstances}
+        onLink={() => {
+          if (!linkTarget) { setLinkErr("Select a target instance."); return; }
+          if (!linkType.trim()) { setLinkErr("Relationship type is required."); return; }
+          linkMutation.mutate({ to_instance: linkTarget.id, rel_type: linkType.trim(), notes: linkNotes });
+        }}
+        onUnlink={(relId) => unlinkMutation.mutate(relId)}
+        isPending={linkMutation.isPending}
+      />
+
       {/* ── Audit trail / comments ── */}
       <div className="card mt-4">
         <div className="card-header">
@@ -521,20 +587,254 @@ export default function InstanceDetailPage() {
 }
 
 function auditBadgeClass(action: string) {
-  if (action === "comment")               return "badge-initial";
-  if (action === "metadata_updated")      return "badge-inactive";
-  if (action.includes("transition"))      return "badge-active";
-  if (action.includes("created"))         return "badge-active";
-  if (action.includes("rule"))            return "badge-warning";
-  if (action.includes("task"))            return "badge-pending";
+  if (action === "comment")                    return "badge-initial";
+  if (action === "metadata_updated")           return "badge-inactive";
+  if (action.includes("relationship"))         return "badge-role-workflow_designer";
+  if (action.includes("transition"))           return "badge-active";
+  if (action.includes("created"))              return "badge-active";
+  if (action.includes("rule"))                 return "badge-warning";
+  if (action.includes("task"))                 return "badge-pending";
   return "badge-inactive";
 }
 
 function eventIcon(action: string) {
-  if (action === "metadata_updated")  return "✎";
-  if (action.includes("transition"))  return "→";
-  if (action.includes("created"))     return "✦";
-  if (action.includes("task"))        return "☑";
-  if (action.includes("rule"))        return "⚡";
+  if (action === "metadata_updated")           return "✎";
+  if (action.includes("relationship_added"))   return "⇌";
+  if (action.includes("relationship_removed")) return "✂";
+  if (action.includes("transition"))           return "→";
+  if (action.includes("created"))              return "✦";
+  if (action.includes("task"))                 return "☑";
+  if (action.includes("rule"))                 return "⚡";
   return "·";
+}
+
+/* ── Relationships panel component ─────────────────────────────────────── */
+
+interface RelPanelProps {
+  instance: WorkflowInstance;
+  myRoles: string[];
+  showLinkForm: boolean;
+  setShowLinkForm: (v: boolean) => void;
+  linkQuery: string;
+  linkResults: InstanceSearchResult[];
+  linkTarget: InstanceSearchResult | null;
+  setLinkTarget: (v: InstanceSearchResult | null) => void;
+  linkType: string;
+  setLinkType: (v: string) => void;
+  linkNotes: string;
+  setLinkNotes: (v: string) => void;
+  linkErr: string | null;
+  onSearch: (q: string) => void;
+  onLink: () => void;
+  onUnlink: (relId: string) => void;
+  isPending: boolean;
+}
+
+const CAN_LINK = new Set(["platform_admin", "workflow_designer", "approver", "participant"]);
+
+function RelationshipsPanel({
+  instance, myRoles, showLinkForm, setShowLinkForm,
+  linkQuery, linkResults, linkTarget, setLinkTarget,
+  linkType, setLinkType, linkNotes, setLinkNotes,
+  linkErr, onSearch, onLink, onUnlink, isPending,
+}: RelPanelProps) {
+  const rels: InstanceRelationship[] = instance.relationships ?? [];
+  const canLink = myRoles.some(r => CAN_LINK.has(r));
+
+  return (
+    <div className="card mt-4">
+      <div className="card-header">
+        <h3>Relationships</h3>
+        <div className="flex gap-2 items-center">
+          <span className="badge badge-inactive">{rels.length}</span>
+          {canLink && !instance.completed_at && (
+            <button
+              className={showLinkForm ? "btn-secondary btn-sm" : "btn-primary btn-sm"}
+              onClick={() => setShowLinkForm(!showLinkForm)}
+            >
+              {showLinkForm ? "Cancel" : "+ Link instance"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Link form ── */}
+      {showLinkForm && (
+        <div style={{
+          background: "var(--bg-elevated)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: 16, marginBottom: 16,
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            {/* Instance search */}
+            <div className="form-group" style={{ marginBottom: 0, position: "relative" }}>
+              <label>Target instance</label>
+              {linkTarget ? (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 10px", background: "rgba(99,102,241,0.08)",
+                  border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6,
+                }}>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 600, color: "var(--accent-light)" }}>
+                    {linkTarget.reference_number}
+                  </span>
+                  <span className="text-xs text-muted">{linkTarget.workflow_name} · {linkTarget.current_state}</span>
+                  <button
+                    onClick={() => setLinkTarget(null)}
+                    style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12 }}
+                  >✕</button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    placeholder="Search by reference or workflow name…"
+                    value={linkQuery}
+                    onChange={e => onSearch(e.target.value)}
+                    autoComplete="off"
+                  />
+                  {linkResults.length > 0 && (
+                    <div style={{
+                      position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+                      background: "var(--bg-secondary)", border: "1px solid var(--border)",
+                      borderRadius: 8, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+                      marginTop: 2,
+                    }}>
+                      {linkResults.map(r => (
+                        <button
+                          key={r.id}
+                          onClick={() => { setLinkTarget(r); }}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", gap: 10,
+                            padding: "8px 12px", background: "none", border: "none",
+                            borderBottom: "1px solid var(--border)", cursor: "pointer", textAlign: "left",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                        >
+                          <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 600, color: "var(--accent-light)", minWidth: 100 }}>
+                            {r.reference_number}
+                          </span>
+                          <span className="text-xs text-muted">{r.workflow_name}</span>
+                          <span className={`badge ${r.completed ? "badge-terminal" : "badge-active"}`} style={{ marginLeft: "auto", fontSize: "0.65rem" }}>
+                            {r.current_state}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Relationship type */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Relationship type</label>
+              <input
+                placeholder="e.g. reported_in, blocks, part_of, duplicate_of"
+                value={linkType}
+                onChange={e => setLinkType(e.target.value)}
+                style={{ fontFamily: "monospace" }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 10 }}>
+            <label>Notes <span className="text-muted">(optional)</span></label>
+            <input
+              placeholder="Context for this link…"
+              value={linkNotes}
+              onChange={e => setLinkNotes(e.target.value)}
+            />
+          </div>
+
+          {linkErr && <div className="alert alert-error mb-2">{linkErr}</div>}
+
+          <button className="btn-primary btn-sm" onClick={onLink} disabled={isPending}>
+            {isPending ? "Linking…" : "Create link"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Relationship list ── */}
+      {rels.length === 0 ? (
+        <div className="empty-state" style={{ padding: "20px 0" }}>
+          <p>No linked instances yet.</p>
+          {canLink && !instance.completed_at && (
+            <p className="text-xs" style={{ marginTop: 6 }}>
+              Link this instance to related Test Runs, Bug Reports, Releases, or any other instance.
+            </p>
+          )}
+        </div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Direction</th>
+              <th>Reference</th>
+              <th>Workflow</th>
+              <th>State</th>
+              <th>Type</th>
+              {canLink && <th style={{ width: 48 }}></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rels.map(rel => {
+              const isOutgoing = rel.from_instance === instance.id;
+              const ref        = isOutgoing ? rel.to_reference   : rel.from_reference;
+              const wfName     = isOutgoing ? rel.to_workflow     : rel.from_workflow;
+              const stateName  = isOutgoing ? rel.to_state        : rel.from_state;
+              const completed  = isOutgoing ? rel.to_completed    : rel.from_completed;
+              const otherId    = isOutgoing ? rel.to_instance     : rel.from_instance;
+              return (
+                <tr key={rel.id}>
+                  <td>
+                    <span style={{
+                      fontSize: "0.7rem", fontWeight: 700, padding: "2px 6px",
+                      borderRadius: 99, background: isOutgoing ? "rgba(99,102,241,0.12)" : "rgba(63,185,80,0.12)",
+                      color: isOutgoing ? "#818cf8" : "#3fb950",
+                    }}>
+                      {isOutgoing ? "→ out" : "← in"}
+                    </span>
+                  </td>
+                  <td>
+                    <Link
+                      to={`/instances/${otherId}`}
+                      style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "var(--accent-light)" }}
+                    >
+                      {ref}
+                    </Link>
+                  </td>
+                  <td className="text-sm text-muted">{wfName}</td>
+                  <td>
+                    <span className={`badge ${completed ? "badge-terminal" : "badge-active"}`}>
+                      {stateName}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: "var(--accent-light)" }}>
+                      {rel.rel_type}
+                    </span>
+                    {rel.notes && (
+                      <div className="text-xs text-muted" style={{ marginTop: 2 }}>{rel.notes}</div>
+                    )}
+                  </td>
+                  {canLink && (
+                    <td>
+                      <button
+                        className="btn-ghost btn-sm"
+                        title="Remove link"
+                        onClick={() => onUnlink(rel.id)}
+                        style={{ color: "var(--danger)", padding: "4px 8px" }}
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }

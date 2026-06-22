@@ -16,6 +16,8 @@ class AuditActionType(models.TextChoices):
     RULE_FIRED = "rule_fired", "Rule Fired"
     COMMENT = "comment", "Comment"
     METADATA_UPDATED = "metadata_updated", "Metadata Updated"
+    RELATIONSHIP_ADDED = "relationship_added", "Relationship Added"
+    RELATIONSHIP_REMOVED = "relationship_removed", "Relationship Removed"
 
 
 class AuditLog(models.Model):

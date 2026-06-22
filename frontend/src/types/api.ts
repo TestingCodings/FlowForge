@@ -69,6 +69,32 @@ export interface Workflow {
   rules: Rule[];
 }
 
+export interface InstanceRelationship {
+  id: string;
+  from_instance: string;
+  from_reference: string;
+  from_workflow: string;
+  from_state: string;
+  from_completed: boolean;
+  to_instance: string;
+  to_reference: string;
+  to_workflow: string;
+  to_state: string;
+  to_completed: boolean;
+  rel_type: string;
+  notes: string;
+  created_by_name: string;
+  created_at: string;
+}
+
+export interface InstanceSearchResult {
+  id: string;
+  reference_number: string;
+  workflow_name: string;
+  current_state: string;
+  completed: boolean;
+}
+
 export interface SlaInfo {
   status: "ok" | "warning" | "breached";
   sla_hours: number;
@@ -89,6 +115,7 @@ export interface WorkflowInstance {
   updated_at: string;
   created_by: string;
   sla: SlaInfo | null;
+  relationships: InstanceRelationship[];
 }
 
 export interface AuditEntry {

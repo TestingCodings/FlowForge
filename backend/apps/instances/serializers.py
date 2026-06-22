@@ -1,3 +1,4 @@
+from django.db import models
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -44,11 +45,29 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     workflow_definition_name = serializers.CharField(source="workflow_definition.name", read_only=True)
     current_state_name = serializers.CharField(source="current_state.name", read_only=True)
     sla = serializers.SerializerMethodField()
+    relationships = serializers.SerializerMethodField()
 
     def get_sla(self, obj):
         if obj.completed_at:
             return None
         return _sla_status(obj)
+
+    def get_relationships(self, obj):
+        # Only embed on detail (single-instance) requests to avoid N+1 on list views
+        request = self.context.get("request")
+        if request and request.parser_context.get("kwargs", {}).get("pk"):
+            from .relationships import InstanceRelationship, InstanceRelationshipSerializer
+            rels = InstanceRelationship.objects.filter(
+                models.Q(from_instance=obj) | models.Q(to_instance=obj)
+            ).select_related(
+                "from_instance__workflow_definition",
+                "from_instance__current_state",
+                "to_instance__workflow_definition",
+                "to_instance__current_state",
+                "created_by",
+            )
+            return InstanceRelationshipSerializer(rels, many=True).data
+        return []
 
     class Meta:
         model = WorkflowInstance
@@ -65,6 +84,7 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "completed_at",
             "metadata_json",
             "sla",
+            "relationships",
         )
         read_only_fields = (
             "id",

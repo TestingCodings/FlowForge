@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Role, RoleName, UserRole
+from .permissions import IsPlatformAdmin, require_role
 from .serializers import RegisterSerializer, UserSerializer, FlowForgeTokenObtainPairSerializer
 from .models import User
 
@@ -39,9 +40,9 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=["post"], url_path="demo-switch", permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], url_path="demo-switch", permission_classes=[IsAuthenticated, IsPlatformAdmin])
     def demo_switch(self, request):
-        """Issue JWT tokens for another user without a password — demo mode only."""
+        """Issue JWT tokens for another user without a password. Platform admin only."""
         user_id = request.data.get("user_id")
         if not user_id:
             return Response({"detail": "user_id required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -56,9 +57,9 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             "user":    UserSerializer(target).data,
         })
 
-    @action(detail=True, methods=["post"], url_path="roles")
+    @action(detail=True, methods=["post"], url_path="roles", permission_classes=[IsAuthenticated, IsPlatformAdmin])
     def set_roles(self, request, pk=None):
-        """Replace the user's roles with the provided list. Body: {"roles": ["approver", "participant"]}"""
+        """Replace the user's roles. Platform admin only. Body: {"roles": ["approver", "participant"]}"""
         user = self.get_object()
         role_names = request.data.get("roles", [])
         valid = {r[0] for r in RoleName.choices}
