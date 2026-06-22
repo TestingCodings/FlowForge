@@ -11,6 +11,7 @@ import NewWorkflowPage from "./pages/NewWorkflowPage";
 import WorkflowBuilderPage from "./pages/WorkflowBuilderPage";
 import RegisterPage from "./pages/RegisterPage";
 import UsersPage from "./pages/UsersPage";
+import HelpPage from "./pages/HelpPage";
 import WorkflowDetailPage from "./pages/WorkflowDetailPage";
 import WorkflowsPage from "./pages/WorkflowsPage";
 
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="tasks" element={<DashboardPage />} />
         <Route path="admin/audit" element={<AuditPage />} />
         <Route path="admin/users" element={<UsersPage />} />
+        <Route path="help" element={<HelpPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

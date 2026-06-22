@@ -32,6 +32,12 @@ export default function InstanceDetailPage() {
   const [commentErr, setCommentErr]   = useState<string | null>(null);
   const [commentOk, setCommentOk]     = useState(false);
 
+  // Metadata editor state
+  const [editingMeta, setEditingMeta]   = useState(false);
+  const [metaRows, setMetaRows]         = useState<Array<{ key: string; value: string }>>([]);
+  const [metaSaveErr, setMetaSaveErr]   = useState<string | null>(null);
+  const [metaSaveOk, setMetaSaveOk]     = useState(false);
+
   /* ── Queries ── */
   const { data: me } = useQuery<UserProfile>({
     queryKey: ["me"],
@@ -91,6 +97,21 @@ export default function InstanceDetailPage() {
     },
   });
 
+  const metaMutation = useMutation({
+    mutationFn: async (metadata_json: Record<string, unknown>) =>
+      (await apiClient.patch(`/instances/${id}/metadata/`, { metadata_json })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["instance", id] });
+      qc.invalidateQueries({ queryKey: ["audit-trail", id] });
+      setEditingMeta(false);
+      setMetaSaveErr(null);
+      setMetaSaveOk(true);
+      setTimeout(() => setMetaSaveOk(false), 3000);
+    },
+    onError: (err: any) =>
+      setMetaSaveErr(err?.response?.data?.detail ?? "Failed to save metadata"),
+  });
+
   const commentMutation = useMutation({
     mutationFn: async (body: string) =>
       (await apiClient.post(`/instances/${id}/comment/`, { body })).data,
@@ -104,6 +125,32 @@ export default function InstanceDetailPage() {
     onError: (err: any) =>
       setCommentErr(err?.response?.data?.detail ?? "Failed to post comment"),
   });
+
+  // Start editing: populate rows from current metadata
+  const startEdit = () => {
+    const entries = Object.entries(instance?.metadata_json ?? {});
+    setMetaRows(entries.length ? entries.map(([k, v]) => ({ key: k, value: String(v) })) : [{ key: "", value: "" }]);
+    setMetaSaveErr(null);
+    setEditingMeta(true);
+  };
+
+  // Coerce string → number | boolean | string
+  const coerce = (v: string): unknown => {
+    if (v === "true")  return true;
+    if (v === "false") return false;
+    const n = Number(v);
+    return v !== "" && !isNaN(n) ? n : v;
+  };
+
+  const saveMeta = () => {
+    const errs = metaRows.filter(r => !r.key.trim());
+    if (errs.length) { setMetaSaveErr("All fields must have a key."); return; }
+    const obj: Record<string, unknown> = {};
+    for (const { key, value } of metaRows) {
+      if (key.trim()) obj[key.trim()] = coerce(value);
+    }
+    metaMutation.mutate(obj);
+  };
 
   const submitComment = () => {
     const body = commentText.trim();
@@ -303,22 +350,94 @@ export default function InstanceDetailPage() {
 
         {/* ── Metadata ── */}
         <div className="card">
-          <div className="card-header"><h3>Metadata</h3></div>
-          {Object.keys(instance.metadata_json ?? {}).length === 0 ? (
-            <p className="text-muted text-sm">No metadata recorded.</p>
-          ) : (
-            <table className="table">
-              <tbody>
-                {Object.entries(instance.metadata_json ?? {}).map(([k, v]) => (
-                  <tr key={k}>
-                    <td style={{ color: "var(--text-secondary)", width: "40%", fontFamily: "monospace", fontSize: "0.8rem" }}>{k}</td>
-                    <td style={{ fontWeight: 500, wordBreak: "break-word" }}>{String(v)}</td>
-                  </tr>
+          <div className="card-header">
+            <h3>Metadata</h3>
+            {!editingMeta && (
+              <button className="btn-secondary btn-sm" onClick={startEdit}>Edit</button>
+            )}
+          </div>
+
+          {editingMeta ? (
+            <div>
+              {/* Editor rows */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                {metaRows.map((row, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr auto", gap: 6, alignItems: "center" }}>
+                    <input
+                      placeholder="field name"
+                      value={row.key}
+                      onChange={e => setMetaRows(rows => rows.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
+                      style={{ fontFamily: "monospace", fontSize: "0.82rem", padding: "5px 8px" }}
+                    />
+                    <input
+                      placeholder="value"
+                      value={row.value}
+                      onChange={e => setMetaRows(rows => rows.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                      style={{ fontSize: "0.82rem", padding: "5px 8px" }}
+                    />
+                    <button
+                      className="btn-ghost btn-sm"
+                      style={{ color: "var(--danger)", padding: "4px 8px" }}
+                      onClick={() => setMetaRows(rows => rows.filter((_, j) => j !== i))}
+                    >✕</button>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* Type hint */}
+              <div className="text-xs text-muted mb-3" style={{ lineHeight: 1.5 }}>
+                Values are auto-typed: <code>42</code> → number · <code>true</code>/<code>false</code> → boolean · anything else → string
+              </div>
+
+              <button
+                className="btn-ghost btn-sm"
+                style={{ marginBottom: 12, width: "100%", borderStyle: "dashed" }}
+                onClick={() => setMetaRows(rows => [...rows, { key: "", value: "" }])}
+              >
+                + Add field
+              </button>
+
+              {metaSaveErr && <div className="alert alert-error mb-2">{metaSaveErr}</div>}
+
+              <div className="flex gap-2">
+                <button className="btn-primary btn-sm" onClick={saveMeta} disabled={metaMutation.isPending}>
+                  {metaMutation.isPending ? "Saving…" : "Save"}
+                </button>
+                <button className="btn-secondary btn-sm" onClick={() => { setEditingMeta(false); setMetaSaveErr(null); }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {metaSaveOk && <div className="alert alert-success mb-2">Metadata saved.</div>}
+              {Object.keys(instance.metadata_json ?? {}).length === 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 0", color: "var(--text-secondary)" }}>
+                  <p className="text-sm">No metadata yet.</p>
+                  <button className="btn-primary btn-sm" onClick={startEdit}>+ Add fields</button>
+                </div>
+              ) : (
+                <table className="table">
+                  <tbody>
+                    {Object.entries(instance.metadata_json ?? {}).map(([k, v]) => (
+                      <tr key={k}>
+                        <td style={{ color: "var(--text-secondary)", width: "42%", fontFamily: "monospace", fontSize: "0.8rem" }}>{k}</td>
+                        <td style={{ fontWeight: 500, wordBreak: "break-word" }}>
+                          {typeof v === "boolean"
+                            ? <span className={`badge ${v ? "badge-active" : "badge-inactive"}`}>{String(v)}</span>
+                            : typeof v === "number"
+                            ? <span style={{ fontFamily: "monospace" }}>{v}</span>
+                            : String(v)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
           )}
-          {instance.completed_at && (
+
+          {instance.completed_at && !editingMeta && (
             <>
               <div className="divider" />
               <div className="text-sm text-muted">Completed {new Date(instance.completed_at).toLocaleString()}</div>
@@ -403,6 +522,7 @@ export default function InstanceDetailPage() {
 
 function auditBadgeClass(action: string) {
   if (action === "comment")               return "badge-initial";
+  if (action === "metadata_updated")      return "badge-inactive";
   if (action.includes("transition"))      return "badge-active";
   if (action.includes("created"))         return "badge-active";
   if (action.includes("rule"))            return "badge-warning";
@@ -411,9 +531,10 @@ function auditBadgeClass(action: string) {
 }
 
 function eventIcon(action: string) {
-  if (action.includes("transition")) return "→";
-  if (action.includes("created"))    return "✦";
-  if (action.includes("task"))       return "☑";
-  if (action.includes("rule"))       return "⚡";
+  if (action === "metadata_updated")  return "✎";
+  if (action.includes("transition"))  return "→";
+  if (action.includes("created"))     return "✦";
+  if (action.includes("task"))        return "☑";
+  if (action.includes("rule"))        return "⚡";
   return "·";
 }

@@ -82,3 +82,26 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
         return Response({"detail": "Comment added."}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["patch"], url_path="metadata")
+    def update_metadata(self, request, pk=None):
+        """Merge-patch the instance metadata_json. Body: {"metadata_json": {...}}"""
+        instance = self.get_object()
+        new_meta = request.data.get("metadata_json")
+        if not isinstance(new_meta, dict):
+            return Response({"detail": "metadata_json must be an object."}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_meta = dict(instance.metadata_json or {})
+        instance.metadata_json = new_meta
+        instance.save(update_fields=["metadata_json", "updated_at"])
+
+        AuditLog.objects.create(
+            workflow_instance=instance,
+            actor=request.user,
+            action_type=AuditActionType.METADATA_UPDATED,
+            from_state=instance.current_state.name,
+            payload={"before": old_meta, "after": new_meta},
+            ip_address=request.META.get("REMOTE_ADDR", ""),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+        return Response(WorkflowInstanceSerializer(instance).data)

@@ -15,6 +15,7 @@ class AuditActionType(models.TextChoices):
     FORM_SUBMITTED = "form_submitted", "Form Submitted"
     RULE_FIRED = "rule_fired", "Rule Fired"
     COMMENT = "comment", "Comment"
+    METADATA_UPDATED = "metadata_updated", "Metadata Updated"
 
 
 class AuditLog(models.Model):
