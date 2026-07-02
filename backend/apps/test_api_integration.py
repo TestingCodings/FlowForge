@@ -2,6 +2,7 @@ import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from conftest import give_role
 from tests.factories import StateFactory, UserFactory, WorkflowDefinitionFactory
 
 
@@ -9,6 +10,7 @@ from tests.factories import StateFactory, UserFactory, WorkflowDefinitionFactory
 def test_core_api_endpoints_are_reachable_with_auth():
     client = APIClient()
     user = UserFactory(password="StrongPass123!")
+    give_role(user, "viewer")
 
     login = client.post(
         reverse("auth-login"),

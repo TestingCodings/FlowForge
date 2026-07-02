@@ -16,12 +16,15 @@ def api_client():
 
 @pytest.fixture
 def user_and_client(api_client):
+    from conftest import give_role
+
     user = User.objects.create_user(
         email="audit@example.com",
         password="StrongPass123!",
         first_name="Audit",
         last_name="User",
     )
+    give_role(user, RoleName.PLATFORM_ADMIN)
     login = api_client.post(
         reverse("auth-login"),
         {"email": user.email, "password": "StrongPass123!"},

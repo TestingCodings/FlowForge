@@ -15,8 +15,11 @@ from tests.factories import (
 
 
 def _auth_client(user=None, password="StrongPass123!"):
+    from conftest import give_role
+
     if user is None:
         user = UserFactory(password=password)
+    give_role(user, "platform_admin")
     client = APIClient()
     resp = client.post(
         reverse("auth-login"),

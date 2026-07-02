@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.forms.models import FormSubmission
+from conftest import give_role
 from apps.instances.models import WorkflowInstance
 from apps.workflows.models import State, Transition, WorkflowDefinition
 
@@ -18,6 +19,7 @@ def auth_client(db):
         first_name="Form",
         last_name="Tester",
     )
+    give_role(user, "platform_admin")
     login = client.post(
         reverse("auth-login"),
         {"email": user.email, "password": "StrongPass123!"},
