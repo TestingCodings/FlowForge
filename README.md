@@ -1,38 +1,50 @@
+<!-- Badges -->
+[![CI](https://github.com/TestingCodings/FlowForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TestingCodings/FlowForge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6.svg)](https://www.typescriptlang.org/)
+
 # FlowForge
 
-A configurable workflow automation platform built as a portfolio project. Define business processes as states, transitions, and rules through a visual UI — no code changes required. The same engine drives an insurance claims assessment, an HR leave approval, or any other multi-step process.
-
-![Dashboard](docs/screenshots/dashboard.png)
+FlowForge is a configurable workflow automation platform that lets teams define any business process as states, transitions, and rules through a visual UI with no code changes required. The same engine drives an insurance claims assessment, a software release pipeline, a TestRail-style test run tracker, or any other multi-step approval process. Every action is captured in an immutable audit trail, roles gate every transition at the API layer, and SLA timers surface overdue work before it becomes a problem.
 
 ---
 
-## Features
+## Architecture
 
-| Feature | Detail |
-|---|---|
-| **Visual Workflow Builder** | Drag-and-drop canvas (React Flow) — draw states, connect them with transitions, set SLA hours and roles, save to API |
-| **Rule Engine** | Per-workflow rules with 10 operators (gt, lt, eq, contains, is_true …) that block transitions or assign roles based on live instance metadata |
-| **State Graph** | BFS-topological SVG diagram on every instance — green = path actually taken, grey = branch not reached, indigo pulse = current state |
-| **Metadata Editor** | Add/edit/delete key-value fields on any live instance; values auto-coerced to number/boolean/string; every edit logged to the audit trail |
-| **Comments** | Inline comment box on every instance; appears in the timeline with actor and timestamp; all roles can comment |
-| **Role-based UI** | Five roles (viewer → platform_admin); approval-only transitions are gated and shown grayed-out to lower roles |
-| **Audit Trail / Timeline** | Immutable log of every event (created, transition, rule fired, comment, metadata update) displayed as a vertical timeline |
-| **Inline Rule Builder** | Condition preview (`IF claim_value gt 10000`), action preview, operator reference — all on the Workflow Detail page |
-| **Users Page** | Manage user roles inline; role legend with capability matrix |
-| **User Guide** | In-app help page with 5-minute walkthrough, operator reference, FAQ |
-| **Dashboard Charts** | Activity area chart (created vs completed, last 14 days), instances-by-state horizontal bar, active/completed stacked bar by workflow |
-| **Seed Command** | `python manage.py seed --reset` — idempotent demo data with full audit trails; add `--testrail` for the test-management workflow set |
+```mermaid
+graph TD
+    subgraph Frontend ["Frontend (React 18 + TypeScript + Vite, port 5173)"]
+        UI[Pages and Components]
+        TQ[TanStack Query]
+        RF[React Flow canvas]
+    end
 
----
+    subgraph Backend ["Backend (Django 5 + DRF, port 8000)"]
+        API[REST API]
+        Engine[Workflow Engine]
+        Perms[Role Permission Layer]
+        Celery[Celery Workers]
+        AuditSvc[Audit Service]
+    end
 
-## Screenshots
+    subgraph Services ["Supporting Services"]
+        RulesMS["Rules Microservice (FastAPI, port 8001)"]
+        PG[(PostgreSQL)]
+        Redis[(Redis)]
+    end
 
-| | |
-|---|---|
-| ![Workflow Builder](docs/screenshots/workflow_builder.png) | ![Rule Builder](docs/screenshots/rule_builder.png) |
-| **Visual Workflow Builder** | **Inline Rule Builder** |
-| ![Instance Detail](docs/screenshots/instance_detail.png) | ![Workflow Detail](docs/screenshots/workflow_detail.png) |
-| **Instance with state graph + timeline** | **Workflow detail with states & transitions** |
+    UI --> TQ --> API
+    RF --> API
+    API --> Engine --> RulesMS
+    Engine --> AuditSvc
+    API --> Celery --> Redis
+    API --> Perms
+    Backend --> PG
+    RulesMS --> PG
+```
+
+**Request path:** the React frontend talks exclusively to the Django REST API over JWT-authenticated requests. When a transition fires, the workflow engine evaluates any blocking rules by calling the FastAPI rules microservice (with a local Python fallback when the service is not running). Every state change, comment, and metadata edit is written to the immutable audit log. Celery handles async work such as notification delivery.
 
 ---
 
@@ -40,33 +52,70 @@ A configurable workflow automation platform built as a portfolio project. Define
 
 | Layer | Technology |
 |---|---|
-| Backend | Django 5.0 + Django REST Framework |
-| Auth | JWT via `djangorestframework-simplejwt` |
-| Rule Engine | FastAPI microservice (optional — falls back to local Python engine) |
-| Database | SQLite (local dev) / PostgreSQL (production-ready) |
+| Backend API | Django 5.0 + Django REST Framework |
+| Authentication | JWT via `djangorestframework-simplejwt` |
+| Rule engine | FastAPI microservice (Python fallback built in) |
+| Task queue | Celery + Redis |
+| Database | PostgreSQL (production) / SQLite (local dev, no Docker needed) |
 | Frontend | React 18 + TypeScript + Vite |
-| State management | TanStack Query (react-query) |
+| Server state | TanStack Query (react-query v5) |
 | Workflow canvas | `@xyflow/react` (React Flow v12) |
-| Forms | react-hook-form |
+| Charts | Recharts |
 | Routing | react-router-dom v6 |
+| CI | GitHub Actions |
 
 ---
 
-## Local Development (no Docker required)
+## Features
+
+| Feature | Detail |
+|---|---|
+| Visual Workflow Builder | Drag-and-drop canvas: draw states, connect transitions, set SLA hours and role requirements, save to the API |
+| Rule Engine | Per-workflow rules with 10 operators (`gt`, `lt`, `eq`, `contains`, `is_true` ...) that block transitions or auto-assign roles based on live instance metadata |
+| State Graph | BFS-topological SVG diagram on every instance: green = path taken, grey = branch not reached, indigo pulse = current state |
+| Relationship Fields | Directional typed links between instances (`reported_in`, `blocks`, `part_of` ...) with debounced search picker and audit on both ends |
+| SLA Breach Indicators | Amber/red badges on overdue instances; tinted rows in the table |
+| Workflow Versioning | Publish a new version from any workflow; deep-clones all states, transitions, and rules as a draft; version history panel |
+| Role-Based Access | Five roles (`viewer` to `platform_admin`); enforced server-side on every API action, not just the UI |
+| Audit Trail / Timeline | Immutable log of every event rendered as a vertical timeline with actor, timestamp, and state delta |
+| Metadata Editor | Add/edit key-value fields on any live instance; values auto-coerced to number/boolean/string |
+| Dashboard Charts | Activity area chart (14 days), instances-by-state bar, active/completed stacked bar by workflow |
+| Demo User Switcher | Flip between admin/approver/participant in one browser tab to demonstrate role differences live |
+| Seed Command | `python manage.py seed --reset` - idempotent demo data with full audit trails; `--testrail` adds a three-workflow test management suite |
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Instance Detail](docs/screenshots/instance_detail.png) |
+| **Dashboard with live charts** | **Instance with state graph + timeline** |
+| ![Workflow Builder](docs/screenshots/workflow_builder.png) | ![Rule Builder](docs/screenshots/rule_builder.png) |
+| **Visual Workflow Builder** | **Inline Rule Builder** |
+| ![Relationships](docs/screenshots/relationships_table.png) | ![SLA Indicators](docs/screenshots/instances_sla.png) |
+| **Instance Relationships panel** | **SLA breach indicators** |
+
+---
+
+## Local Setup
 
 ### Prerequisites
 
 - Python 3.11+
 - Node.js 18+
 
-### 1 — Backend
+No Docker required for local development. SQLite is used by default.
+
+### 1. Backend
 
 ```bash
 cd backend
 python -m venv venv
-# Windows:
+
+# Windows
 venv\Scripts\activate
-# macOS/Linux:
+# macOS / Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
@@ -79,15 +128,17 @@ python manage.py seed   --settings=config.settings.local_sqlite
 python manage.py runserver --settings=config.settings.local_sqlite
 ```
 
-### 2 — Frontend
+The seed command prints all demo credentials to your terminal on completion.
+
+### 2. Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev          # Vite dev server on http://localhost:5173
+npm run dev     # Vite dev server at http://localhost:5173
 ```
 
-### 3 — Rules microservice (optional)
+### 3. Rules microservice (optional)
 
 ```bash
 cd rules-service
@@ -95,69 +146,28 @@ pip install -r requirements.txt
 uvicorn main:app --port 8001
 ```
 
-If the rules service is not running, the backend automatically falls back to the built-in Python rule evaluator — all rule features still work.
+If the microservice is not running the backend falls back to the built-in Python evaluator automatically. All rule features still work.
 
 ---
 
-## Demo Credentials
+## Demo Walkthrough (5 minutes)
 
-Run the seed command — it prints all credentials on completion:
+1. Log in with the `platform_admin` credentials printed by `seed`
+2. Open **Workflows > Insurance Claim** and inspect the state graph and the blocking rule
+3. Click **+ New CLM** to create a fresh instance
+4. In the Metadata panel click **Edit** and add `claim_value = 15000`
+5. Try **Approve Standard**: the rule blocks it with a configured message
+6. Click **Escalate**, then **Director Approve** to resolve the claim
+7. Add a comment at any step; it appears in the Timeline with actor and timestamp
+8. Use **Switch demo user** in the sidebar to become the `participant` account and observe that approval transitions are grayed out
 
-```bash
-python manage.py seed --settings=config.settings.local_sqlite
-```
-
-Four demo users are created across the role spectrum (platform_admin, approver, participant). Credentials are intentionally not published here.
-
----
-
-## Demo Workflows
-
-### Employee Leave Request (LVE)
-3 states · 2 transitions · linear flow
-
-```
-Draft → [Submit] → Manager Review → [Approve*] → Approved
-```
-`*` requires approver role
-
-### Test Management (TRN / BUG / REL) — `--testrail`
-
-Three linked workflows that turn FlowForge into a TestRail replacement:
-
-- **Test Run (TRN)** — plan → in progress → passed/failed/blocked. Rules block "Mark Passed" if `fail_count > 0` or `block_count > 0`
-- **Bug Report (BUG)** — new → in progress → in review → fixed/won't fix/duplicate. Cross-referenced to the failing test run via `reported_in` metadata
-- **Release (REL)** — draft → QA sign-off → approved → deployed/rolled back. Rules block QA sign-off if `open_critical_bugs > 0` or `failing_runs > 0`
+### TestRail-style demo
 
 ```bash
 python manage.py seed --testrail --settings=config.settings.local_sqlite
 ```
 
----
-
-### Insurance Claim (CLM)
-6 states · 7 transitions · branching with value-based escalation rule
-
-```
-New Claim → [Submit Claim] → Under Review ──[Approve Standard*]──→ Approved → [Pay Out] → Paid Out
-                                          └──[Escalate]──→ Director Approval ──[Director Approve*]──→ Approved
-                                          └──[Reject]────→ Rejected           └──[Director Reject]──→ Rejected
-```
-
-**Rule:** `IF claim_value > 10000 THEN block "Approve Standard"` with message _"Claims over £10,000 require Director approval. Use Escalate instead."_
-
----
-
-## 5-Minute Interactive Demo
-
-1. Log in with the platform_admin account printed by the seed command
-2. Open **Workflows → Insurance Claim** — inspect the state graph and the blocking rule
-3. Click **+ New CLM** to create a fresh instance
-4. On the instance page, click **Edit** in the Metadata panel and add `claim_value = 15000`
-5. Try **Approve Standard** — the rule blocks it with the configured message
-6. Click **Escalate** → then **Director Approve** to resolve the claim
-7. Add a comment at any point — it appears in the Timeline
-8. Log in as the participant account — the approval transitions are grayed out
+Seeds three linked workflows (Test Run, Bug Report, Release) with pre-populated relationships across instances. Open any `TRN-` instance to see the Relationships panel showing the linked `BUG-` reports and the `REL-` they are blocking.
 
 ---
 
@@ -167,44 +177,63 @@ New Claim → [Submit Claim] → Under Review ──[Approve Standard*]──→
 FlowForge/
 ├── backend/
 │   ├── apps/
-│   │   ├── accounts/      # Users, roles, JWT auth
-│   │   ├── audit/         # Immutable audit log
-│   │   ├── instances/     # Workflow instances, transitions, comments, metadata
-│   │   ├── notifications/ # Notification templates and logs
-│   │   ├── tasks/         # Task assignment per state
-│   │   └── workflows/     # Workflow definitions, states, transitions, rules, engine
-│   └── config/
-│       └── settings/
-│           └── local_sqlite.py   # No-Docker dev settings
+│   │   ├── accounts/       # Users, roles, JWT auth, permission layer
+│   │   ├── audit/          # Immutable audit log and service helpers
+│   │   ├── instances/      # Workflow instances, transitions, relationships
+│   │   ├── notifications/  # Notification templates and delivery log
+│   │   ├── tasks/          # Per-state task assignment
+│   │   └── workflows/      # Definitions, states, transitions, rules, engine
+│   └── config/settings/
+│       ├── base.py
+│       ├── local.py        # CI / PostgreSQL settings
+│       └── local_sqlite.py # No-Docker local dev settings
 ├── frontend/
 │   └── src/
-│       ├── components/    # AppLayout, StateGraph, ProtectedRoute
-│       ├── pages/         # One file per route
-│       ├── api/           # Axios client with JWT interceptors
-│       └── types/         # TypeScript interfaces
-├── rules-service/         # FastAPI rule evaluation microservice
-└── docs/screenshots/      # UI screenshots
+│       ├── components/     # AppLayout, StateGraph, ProtectedRoute
+│       ├── pages/          # One file per route
+│       ├── api/            # Axios client with JWT interceptors
+│       └── types/          # Shared TypeScript interfaces
+├── rules-service/          # FastAPI rule evaluation microservice
+├── docs/
+│   ├── VISION.md           # Platform architecture and three-layer roadmap
+│   └── screenshots/
+└── .github/workflows/ci.yml
 ```
 
 ---
 
-## Roles & Capabilities
+## Roles and Capabilities
 
-| Role | Comment | Transition | Approve | Admin |
-|---|---|---|---|---|
-| viewer | ✓ | — | — | — |
-| participant | ✓ | ✓ | — | — |
-| approver | ✓ | ✓ | ✓ | — |
-| workflow_designer | ✓ | ✓ | ✓ | Workflows |
-| platform_admin | ✓ | ✓ | ✓ | ✓ |
+| Role | Comment | Transition | Approve | Design Workflows | Admin |
+|---|---|---|---|---|---|
+| viewer | Yes | | | | |
+| participant | Yes | Yes | | | |
+| approver | Yes | Yes | Yes | | |
+| workflow_designer | Yes | Yes | Yes | Yes | |
+| platform_admin | Yes | Yes | Yes | Yes | Yes |
+
+All role checks are enforced server-side in `apps/accounts/permissions.py`. Frontend gating is a UX convenience layer only.
 
 ---
 
 ## Roadmap
 
-- [x] Dashboard analytics charts (instances by state, completion rate over time)
-- [ ] Multi-user demo switcher in the header
-- [ ] SLA breach indicators on overdue instances
-- [ ] Workflow versioning — publish new versions, migrate open instances
-- [ ] PostgreSQL + Docker Compose production setup
-- [ ] Role enforcement at the API layer (currently frontend-only)
+The project is built in deliberate phases, each shipping a complete vertical slice before the next begins.
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Core engine: states, transitions, rules, JWT auth, audit log | Done |
+| 2 | Visual workflow builder (React Flow canvas), inline rule editor | Done |
+| 3 | Dashboard analytics, seed workflows, user guide | Done |
+| 4 | API-layer role enforcement, SLA indicators, workflow versioning, instance relationships | Done |
+| 5 | Docker Compose + PostgreSQL production setup, Celery notifications | Planned |
+| 6 | Custom UI shell: per-workflow theming and layout overrides | Planned |
+| 7 | Packaged deployable apps (shippable white-label workflows) | Planned |
+
+See [docs/VISION.md](docs/VISION.md) for the full platform architecture vision including the three-layer extensibility model.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
