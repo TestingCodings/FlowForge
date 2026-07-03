@@ -1,5 +1,9 @@
-from rest_framework import viewsets
+from django.db.models import ProtectedError
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from apps.accounts.permissions import IsViewer, require_min_role
 
 from .models import FormDefinition, FormSubmission
 from .serializers import FormDefinitionSerializer, FormSubmissionSerializer
@@ -8,7 +12,26 @@ from .serializers import FormDefinitionSerializer, FormSubmissionSerializer
 class FormDefinitionViewSet(viewsets.ModelViewSet):
     queryset = FormDefinition.objects.select_related("workflow_definition", "state", "created_by").all()
     serializer_class = FormDefinitionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
+    filterset_fields = ["workflow_definition", "state"]
+
+    def create(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="create a form definition")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="edit a form definition")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        require_min_role(request.user, "workflow_designer", action="delete a form definition")
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "This form has submissions and cannot be deleted. Publish a new workflow version instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class FormSubmissionViewSet(viewsets.ModelViewSet):
@@ -16,5 +39,9 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         "workflow_instance", "form_definition", "submitted_by"
     ).all()
     serializer_class = FormSubmissionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
     http_method_names = ["get", "post", "head", "options"]
+
+    def create(self, request, *args, **kwargs):
+        require_min_role(request.user, "participant", action="submit a form")
+        return super().create(request, *args, **kwargs)

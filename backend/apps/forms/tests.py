@@ -124,3 +124,88 @@ class TestFormsApi:
             format="json",
         )
         assert patch_submission.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+@pytest.mark.django_db
+class TestFormGatedTransitions:
+    def test_transition_blocked_until_form_submitted_then_allowed(self, auth_client, workflow_instance):
+        client, _ = auth_client
+        wf, state, instance = workflow_instance
+        transition = Transition.objects.get(workflow_definition=wf, name="Submit")
+
+        form_response = client.post(
+            "/api/forms/",
+            {
+                "workflow_definition": str(wf.id),
+                "state": str(state.id),
+                "name": "Draft Checklist",
+                "schema": {
+                    "required_to_transition": True,
+                    "fields": [
+                        {"name": "ready", "type": "checkbox", "required": True, "label": "Ready?"},
+                    ],
+                },
+                "version": 1,
+            },
+            format="json",
+        )
+        assert form_response.status_code == status.HTTP_201_CREATED
+        form_id = form_response.data["id"]
+
+        # Transition blocked while the form is unsubmitted
+        blocked = client.post(
+            f"/api/instances/{instance.id}/transition/",
+            {"transition_id": str(transition.id)},
+            format="json",
+        )
+        assert blocked.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Draft Checklist" in str(blocked.data)
+
+        # Submit the form; data merges into instance metadata
+        submitted = client.post(
+            "/api/submissions/",
+            {
+                "workflow_instance": str(instance.id),
+                "form_definition": form_id,
+                "data": {"ready": True},
+            },
+            format="json",
+        )
+        assert submitted.status_code == status.HTTP_201_CREATED
+        instance.refresh_from_db()
+        assert instance.metadata_json.get("ready") is True
+
+        # Transition now succeeds
+        allowed = client.post(
+            f"/api/instances/{instance.id}/transition/",
+            {"transition_id": str(transition.id)},
+            format="json",
+        )
+        assert allowed.status_code == status.HTTP_200_OK
+
+    def test_optional_form_does_not_block_transition(self, auth_client, workflow_instance):
+        client, _ = auth_client
+        wf, state, instance = workflow_instance
+        transition = Transition.objects.get(workflow_definition=wf, name="Submit")
+
+        client.post(
+            "/api/forms/",
+            {
+                "workflow_definition": str(wf.id),
+                "state": str(state.id),
+                "name": "Optional Survey",
+                "schema": {
+                    "required_to_transition": False,
+                    "fields": [{"name": "feedback", "type": "text", "required": False}],
+                },
+                "version": 1,
+            },
+            format="json",
+        )
+
+        response = client.post(
+            f"/api/instances/{instance.id}/transition/",
+            {"transition_id": str(transition.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK

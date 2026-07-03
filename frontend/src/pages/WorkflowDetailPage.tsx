@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
-import { Workflow } from "../types/api";
+import { Workflow, FormDefinitionApi, FormField } from "../types/api";
 import StateGraph from "../components/StateGraph";
+
+const FIELD_TYPES = ["text", "textarea", "number", "checkbox", "dropdown", "date"] as const;
 
 /* ─── Constants ─── */
 const OPERATORS = [
@@ -143,6 +145,61 @@ export default function WorkflowDetailPage() {
     queryFn: async () => (await apiClient.get(`/workflows/${id}/version-history/`)).data,
     enabled: Boolean(id),
   });
+
+  /* ─── State forms ─── */
+  const { data: stateForms = [] } = useQuery<FormDefinitionApi[]>({
+    queryKey: ["stateForms", id],
+    queryFn: async () =>
+      (await apiClient.get(`/forms/?workflow_definition=${id}`)).data.results ?? [],
+    enabled: Boolean(id),
+  });
+
+  const [formEditorState, setFormEditorState] = useState<string | null>(null); // state id being edited
+  const [formName, setFormName] = useState("");
+  const [formRequired, setFormRequired] = useState(true);
+  const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [formSaveErr, setFormSaveErr] = useState<string | null>(null);
+
+  const saveForm = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        workflow_definition: id,
+        state: formEditorState,
+        name: formName.trim(),
+        schema: {
+          required_to_transition: formRequired,
+          fields: formFields.filter(f => f.name.trim()),
+        },
+        version: 1,
+      };
+      const existing = stateForms.find(f => f.state === formEditorState);
+      if (existing) {
+        return (await apiClient.put(`/forms/${existing.id}/`, { ...payload, version: existing.version })).data;
+      }
+      return (await apiClient.post("/forms/", payload)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stateForms", id] });
+      setFormEditorState(null);
+      setFormSaveErr(null);
+    },
+    onError: (err: any) =>
+      setFormSaveErr(JSON.stringify(err?.response?.data ?? "Save failed")),
+  });
+
+  const deleteForm = useMutation({
+    mutationFn: async (formId: string) => apiClient.delete(`/forms/${formId}/`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stateForms", id] }),
+  });
+
+  const openFormEditor = (stateId: string) => {
+    const existing = stateForms.find(f => f.state === stateId);
+    setFormName(existing?.name ?? "");
+    setFormRequired(existing?.schema?.required_to_transition ?? true);
+    setFormFields(existing?.schema?.fields ?? [{ name: "", type: "text", required: false, label: "" }]);
+    setFormSaveErr(null);
+    setFormEditorState(stateId);
+  };
 
   /* ─── Loading / not found ─── */
   if (isLoading) {
@@ -532,6 +589,169 @@ export default function WorkflowDetailPage() {
               ))}
             </div>
           </details>
+        )}
+      </div>
+
+      {/* ── State forms ── */}
+      <div className="card mt-4">
+        <div className="card-header">
+          <div className="flex items-center gap-3">
+            <h3>State Forms</h3>
+            {stateForms.length > 0 && (
+              <span className="badge badge-active">{stateForms.length} configured</span>
+            )}
+          </div>
+        </div>
+        <p className="text-sm text-muted" style={{ marginBottom: 14 }}>
+          Attach a structured form to any state. Required forms must be completed before an
+          instance can transition out of that state, and submitted values feed directly into
+          rule evaluation.
+        </p>
+
+        <table className="table">
+          <thead>
+            <tr><th>State</th><th>Form</th><th>Fields</th><th>Gate</th><th style={{ width: 130 }}></th></tr>
+          </thead>
+          <tbody>
+            {(wf.states ?? []).filter(s => !s.is_terminal).map(s => {
+              const f = stateForms.find(x => x.state === s.id);
+              return (
+                <tr key={s.id}>
+                  <td style={{ fontWeight: 500 }}>{s.display_name || s.name}</td>
+                  <td>
+                    {f
+                      ? <span style={{ color: "var(--accent-light)" }}>{f.name}</span>
+                      : <span className="text-muted text-sm">—</span>}
+                  </td>
+                  <td className="text-sm text-muted">
+                    {f ? `${(f.schema.fields ?? []).length} field${(f.schema.fields ?? []).length === 1 ? "" : "s"}` : "—"}
+                  </td>
+                  <td>
+                    {f && (
+                      <span className={`badge ${f.schema.required_to_transition !== false ? "badge-warning" : "badge-inactive"}`} style={{ fontSize: "0.68rem" }}>
+                        {f.schema.required_to_transition !== false ? "Blocks transition" : "Optional"}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="flex gap-2">
+                      <button className="btn-secondary btn-sm" onClick={() => openFormEditor(s.id)}>
+                        {f ? "Edit" : "+ Add form"}
+                      </button>
+                      {f && (
+                        <button
+                          className="btn-ghost btn-sm"
+                          style={{ color: "var(--danger)" }}
+                          onClick={() => deleteForm.mutate(f.id)}
+                        >✕</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Form editor */}
+        {formEditorState && (
+          <div style={{
+            marginTop: 16, padding: 16, background: "var(--bg-elevated)",
+            border: "1px solid var(--border)", borderRadius: 10,
+          }}>
+            <div className="flex items-center gap-3 mb-3" style={{ justifyContent: "space-between" }}>
+              <strong className="text-sm">
+                Form for state:{" "}
+                <span style={{ color: "var(--accent-light)" }}>
+                  {(wf.states ?? []).find(s => s.id === formEditorState)?.name}
+                </span>
+              </strong>
+              <label className="flex items-center gap-2 text-sm" style={{ cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={formRequired}
+                  onChange={e => setFormRequired(e.target.checked)}
+                  style={{ accentColor: "#6366f1" }}
+                />
+                Must be completed before transition
+              </label>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label>Form name</label>
+              <input
+                placeholder="e.g. Claim Assessment"
+                value={formName}
+                onChange={e => setFormName(e.target.value)}
+              />
+            </div>
+
+            <div className="text-xs text-muted mb-2" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Fields
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+              {formFields.map((fld, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 130px auto auto", gap: 6, alignItems: "center" }}>
+                  <input
+                    placeholder="field_name"
+                    value={fld.name}
+                    onChange={e => setFormFields(rows => rows.map((r, j) => j === i ? { ...r, name: e.target.value.replace(/\s+/g, "_").toLowerCase() } : r))}
+                    style={{ fontFamily: "monospace", fontSize: "0.8rem", padding: "5px 8px" }}
+                  />
+                  <input
+                    placeholder="Label shown to user"
+                    value={fld.label ?? ""}
+                    onChange={e => setFormFields(rows => rows.map((r, j) => j === i ? { ...r, label: e.target.value } : r))}
+                    style={{ fontSize: "0.82rem", padding: "5px 8px" }}
+                  />
+                  <select
+                    value={fld.type}
+                    onChange={e => setFormFields(rows => rows.map((r, j) => j === i ? { ...r, type: e.target.value as FormField["type"] } : r))}
+                    style={{ fontSize: "0.8rem", padding: "5px 8px" }}
+                  >
+                    {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <label className="flex items-center gap-1 text-xs" style={{ cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(fld.required)}
+                      onChange={e => setFormFields(rows => rows.map((r, j) => j === i ? { ...r, required: e.target.checked } : r))}
+                      style={{ accentColor: "#6366f1" }}
+                    />
+                    required
+                  </label>
+                  <button
+                    className="btn-ghost btn-sm"
+                    style={{ color: "var(--danger)", padding: "4px 8px" }}
+                    onClick={() => setFormFields(rows => rows.filter((_, j) => j !== i))}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn-ghost btn-sm"
+              style={{ marginBottom: 12, width: "100%", borderStyle: "dashed" }}
+              onClick={() => setFormFields(rows => [...rows, { name: "", type: "text", required: false, label: "" }])}
+            >
+              + Add field
+            </button>
+
+            {formSaveErr && <div className="alert alert-error mb-2">{formSaveErr}</div>}
+
+            <div className="flex gap-2">
+              <button
+                className="btn-primary btn-sm"
+                onClick={() => saveForm.mutate()}
+                disabled={saveForm.isPending || !formName.trim() || formFields.filter(f => f.name.trim()).length === 0}
+              >
+                {saveForm.isPending ? "Saving…" : "Save form"}
+              </button>
+              <button className="btn-secondary btn-sm" onClick={() => setFormEditorState(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

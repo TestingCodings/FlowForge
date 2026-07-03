@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import {
   WorkflowInstance, Transition, AuditEntry, UserProfile,
-  InstanceRelationship, InstanceSearchResult,
+  InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
 
@@ -136,6 +136,16 @@ export default function InstanceDetailPage() {
     },
     onError: (err: any) =>
       setCommentErr(err?.response?.data?.detail ?? "Failed to post comment"),
+  });
+
+  const formMutation = useMutation({
+    mutationFn: async (payload: { form_definition: string; data: Record<string, unknown> }) =>
+      (await apiClient.post("/submissions/", { workflow_instance: id, ...payload })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["instance", id] });
+      qc.invalidateQueries({ queryKey: ["audit-trail", id] });
+      setBlockReason(null);
+    },
   });
 
   const linkMutation = useMutation({
@@ -487,6 +497,23 @@ export default function InstanceDetailPage() {
         </div>
       </div>
 
+      {/* ── State form ── */}
+      {instance.current_form && !isCompleted && (
+        <StateFormPanel
+          form={instance.current_form}
+          canSubmit={userCan(myRoles, "transition")}
+          isPending={formMutation.isPending}
+          onSubmit={(data) =>
+            formMutation.mutate({ form_definition: instance.current_form!.id, data })
+          }
+          submitError={
+            (formMutation.error as any)?.response?.data
+              ? JSON.stringify((formMutation.error as any).response.data)
+              : formMutation.isError ? "Submission failed" : null
+          }
+        />
+      )}
+
       {/* ── Relationships ── */}
       <RelationshipsPanel
         instance={instance}
@@ -599,6 +626,7 @@ function auditBadgeClass(action: string) {
 
 function eventIcon(action: string) {
   if (action === "metadata_updated")           return "✎";
+  if (action.includes("form"))                 return "📋";
   if (action.includes("relationship_added"))   return "⇌";
   if (action.includes("relationship_removed")) return "✂";
   if (action.includes("transition"))           return "→";
@@ -606,6 +634,219 @@ function eventIcon(action: string) {
   if (action.includes("task"))                 return "☑";
   if (action.includes("rule"))                 return "⚡";
   return "·";
+}
+
+/* ── State form panel component ────────────────────────────────────────── */
+
+function StateFormPanel({
+  form, canSubmit, isPending, onSubmit, submitError,
+}: {
+  form: CurrentForm;
+  canSubmit: boolean;
+  isPending: boolean;
+  onSubmit: (data: Record<string, unknown>) => void;
+  submitError: string | null;
+}) {
+  const fields = form.schema.fields ?? [];
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [localErrs, setLocalErrs] = useState<Record<string, string>>({});
+
+  const setValue = (name: string, v: unknown) =>
+    setValues(prev => ({ ...prev, [name]: v }));
+
+  const submit = () => {
+    const errs: Record<string, string> = {};
+    for (const f of fields) {
+      const v = values[f.name];
+      if (f.required && (v === undefined || v === null || v === "")) {
+        errs[f.name] = "Required";
+      }
+      if (v !== undefined && v !== "" && (f.type === "number" || f.type === "currency")) {
+        const n = Number(v);
+        if (Number.isNaN(n)) errs[f.name] = "Must be a number";
+        else if (f.min !== undefined && n < f.min) errs[f.name] = `Must be ≥ ${f.min}`;
+        else if (f.max !== undefined && n > f.max) errs[f.name] = `Must be ≤ ${f.max}`;
+      }
+    }
+    setLocalErrs(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    const data: Record<string, unknown> = {};
+    for (const f of fields) {
+      let v = values[f.name];
+      if (v === undefined || v === "") {
+        if (f.type === "checkbox" || f.type === "toggle") v = false;
+        else continue;
+      }
+      if (f.type === "number" || f.type === "currency") v = Number(v);
+      data[f.name] = v;
+    }
+    onSubmit(data);
+  };
+
+  if (form.submitted) {
+    return (
+      <div className="card mt-4">
+        <div className="card-header">
+          <h3>{form.name}</h3>
+          <span className="badge badge-active">✓ Submitted</span>
+        </div>
+        <table className="table">
+          <tbody>
+            {Object.entries(form.submission_data ?? {}).map(([k, v]) => {
+              const field = fields.find(f => f.name === k);
+              return (
+                <tr key={k}>
+                  <td style={{ color: "var(--text-secondary)", width: "42%", fontSize: "0.85rem" }}>
+                    {field?.label || k}
+                  </td>
+                  <td style={{ fontWeight: 500 }}>
+                    {typeof v === "boolean"
+                      ? <span className={`badge ${v ? "badge-active" : "badge-inactive"}`}>{String(v)}</span>
+                      : String(v)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {form.submitted_at && (
+          <div className="text-xs text-muted" style={{ marginTop: 8 }}>
+            Submitted {new Date(form.submitted_at).toLocaleString()}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card mt-4">
+      <div className="card-header">
+        <h3>{form.name}</h3>
+        {form.required_to_transition && (
+          <span className="badge badge-warning" style={{ fontSize: "0.7rem" }}>
+            Required before transition
+          </span>
+        )}
+      </div>
+
+      {!canSubmit ? (
+        <p className="text-sm text-muted">Submitting this form requires at least participant role.</p>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+            {fields.map(f => (
+              <FormFieldInput
+                key={f.name}
+                field={f}
+                value={values[f.name]}
+                error={localErrs[f.name]}
+                onChange={v => setValue(f.name, v)}
+              />
+            ))}
+          </div>
+
+          {submitError && <div className="alert alert-error mb-2">{submitError}</div>}
+
+          <button className="btn-primary btn-sm" onClick={submit} disabled={isPending}>
+            {isPending ? "Submitting…" : `Submit ${form.name}`}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FormFieldInput({
+  field, value, error, onChange,
+}: {
+  field: FormField;
+  value: unknown;
+  error?: string;
+  onChange: (v: unknown) => void;
+}) {
+  const label = (
+    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>
+      {field.label || field.name}
+      {field.required && <span style={{ color: "var(--danger)", marginLeft: 3 }}>*</span>}
+    </label>
+  );
+  const errEl = error && (
+    <div className="text-xs" style={{ color: "var(--danger)", marginTop: 3 }}>{error}</div>
+  );
+  const inputStyle = {
+    width: "100%", padding: "7px 10px", background: "var(--bg-elevated)",
+    border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`,
+    borderRadius: 8, color: "var(--text-primary)", fontSize: "0.85rem",
+    fontFamily: "inherit", boxSizing: "border-box" as const, outline: "none",
+  };
+
+  if (field.type === "checkbox" || field.type === "toggle") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 18 }}>
+        <input
+          type="checkbox"
+          id={`ff-${field.name}`}
+          checked={Boolean(value)}
+          onChange={e => onChange(e.target.checked)}
+          style={{ width: 16, height: 16, accentColor: "#6366f1" }}
+        />
+        <label htmlFor={`ff-${field.name}`} style={{ fontSize: "0.85rem", cursor: "pointer" }}>
+          {field.label || field.name}
+          {field.required && <span style={{ color: "var(--danger)", marginLeft: 3 }}>*</span>}
+        </label>
+        {errEl}
+      </div>
+    );
+  }
+
+  if (field.type === "textarea") {
+    return (
+      <div style={{ gridColumn: "1 / -1" }}>
+        {label}
+        <textarea
+          rows={3}
+          value={(value as string) ?? ""}
+          onChange={e => onChange(e.target.value)}
+          style={{ ...inputStyle, resize: "vertical" }}
+        />
+        {errEl}
+      </div>
+    );
+  }
+
+  if (field.type === "dropdown" && field.options?.length) {
+    return (
+      <div>
+        {label}
+        <select
+          value={(value as string) ?? ""}
+          onChange={e => onChange(e.target.value)}
+          style={inputStyle}
+        >
+          <option value="">Select…</option>
+          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {errEl}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {label}
+      <input
+        type={field.type === "number" || field.type === "currency" ? "number"
+          : field.type === "date" ? "date"
+          : field.type === "datetime" ? "datetime-local"
+          : "text"}
+        value={(value as string | number) ?? ""}
+        onChange={e => onChange(e.target.value)}
+        style={inputStyle}
+      />
+      {errEl}
+    </div>
+  );
 }
 
 /* ── Relationships panel component ─────────────────────────────────────── */

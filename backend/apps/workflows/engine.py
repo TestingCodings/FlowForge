@@ -17,6 +17,29 @@ class TransitionResult:
     actions: list[dict]
 
 
+def _check_required_form(instance):
+    """Block leaving a state whose form requires submission and has none."""
+    from apps.forms.models import FormDefinition, FormSubmission
+
+    form = (
+        FormDefinition.objects
+        .filter(state_id=instance.current_state_id)
+        .order_by("-version")
+        .first()
+    )
+    if form is None:
+        return
+    if not form.schema.get("required_to_transition", True):
+        return
+    submitted = FormSubmission.objects.filter(
+        workflow_instance=instance, form_definition=form
+    ).exists()
+    if not submitted:
+        raise WorkflowTransitionError(
+            f"Form '{form.name}' must be completed before leaving '{instance.current_state.name}'."
+        )
+
+
 def validate_transition(instance, transition_id):
     try:
         transition = Transition.objects.select_related("from_state", "to_state").get(id=transition_id)
@@ -30,6 +53,8 @@ def validate_transition(instance, transition_id):
         raise WorkflowTransitionError(
             f"Transition '{transition.name}' is invalid from state '{instance.current_state.name}'"
         )
+
+    _check_required_form(instance)
 
     actions = evaluate_for_transition(instance, transition)
     for action in actions:

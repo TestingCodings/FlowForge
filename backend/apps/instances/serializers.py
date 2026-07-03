@@ -46,11 +46,47 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     current_state_name = serializers.CharField(source="current_state.name", read_only=True)
     sla = serializers.SerializerMethodField()
     relationships = serializers.SerializerMethodField()
+    current_form = serializers.SerializerMethodField()
 
     def get_sla(self, obj):
         if obj.completed_at:
             return None
         return _sla_status(obj)
+
+    def _is_detail_request(self):
+        request = self.context.get("request")
+        return bool(request and request.parser_context.get("kwargs", {}).get("pk"))
+
+    def get_current_form(self, obj):
+        """Latest form for the current state plus this instance's submission. Detail only."""
+        if not self._is_detail_request():
+            return None
+        from apps.forms.models import FormDefinition, FormSubmission
+
+        form = (
+            FormDefinition.objects
+            .filter(state_id=obj.current_state_id)
+            .order_by("-version")
+            .first()
+        )
+        if form is None:
+            return None
+        submission = (
+            FormSubmission.objects
+            .filter(workflow_instance=obj, form_definition=form)
+            .order_by("-submitted_at")
+            .first()
+        )
+        return {
+            "id": str(form.id),
+            "name": form.name,
+            "schema": form.schema,
+            "version": form.version,
+            "required_to_transition": form.schema.get("required_to_transition", True),
+            "submitted": submission is not None,
+            "submission_data": submission.data if submission else None,
+            "submitted_at": submission.submitted_at.isoformat() if submission else None,
+        }
 
     def get_relationships(self, obj):
         # Only embed on detail (single-instance) requests to avoid N+1 on list views
@@ -85,6 +121,7 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "metadata_json",
             "sla",
             "relationships",
+            "current_form",
         )
         read_only_fields = (
             "id",

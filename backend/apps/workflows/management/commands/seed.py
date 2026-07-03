@@ -76,6 +76,21 @@ CLAIM_WORKFLOW = {
          "action": {"type": "block_transition", "reason": "Claims over £10,000 require Director approval. Use Escalate instead."},
          "priority": 1},
     ],
+    "forms": [
+        {
+            "state": "Under Review",
+            "name": "Claim Assessment",
+            "schema": {
+                "required_to_transition": True,
+                "fields": [
+                    {"name": "assessed_value",     "type": "number",   "required": True,  "label": "Assessed value (£)", "min": 0},
+                    {"name": "policy_valid",       "type": "checkbox", "required": True,  "label": "Policy checked and valid?"},
+                    {"name": "assessor_notes",     "type": "textarea", "required": False, "label": "Assessor notes"},
+                    {"name": "evidence_reviewed",  "type": "checkbox", "required": True,  "label": "Supporting evidence reviewed?"},
+                ],
+            },
+        },
+    ],
     "instances": [
         {"creator": "bob@flowforge.dev",   "meta": {"claim_value": 850,   "category": "Property",   "claimant": "Bob Smith",      "description": "Roof damage from storm"},          "advance": []},
         {"creator": "bob@flowforge.dev",   "meta": {"claim_value": 3200,  "category": "Vehicle",    "claimant": "Bob Smith",      "description": "Car repair after collision"},       "advance": ["Submit Claim"]},
@@ -110,6 +125,21 @@ TESTRAIL_WORKFLOWS = [
             {"name": "Mark Blocked",    "from": "In Progress", "to": "Blocked"},
             {"name": "Reopen",          "from": "Failed",      "to": "In Progress"},
             {"name": "Reopen Blocked",  "from": "Blocked",     "to": "In Progress"},
+        ],
+        "forms": [
+            {
+                "state": "In Progress",
+                "name": "Test Results",
+                "schema": {
+                    "required_to_transition": True,
+                    "fields": [
+                        {"name": "cases_executed",  "type": "number",   "required": True,  "label": "Cases executed", "min": 0},
+                        {"name": "fail_count",      "type": "number",   "required": True,  "label": "Failures recorded", "min": 0},
+                        {"name": "evidence_url",    "type": "text",     "required": False, "label": "Evidence link"},
+                        {"name": "environment_ok",  "type": "checkbox", "required": True,  "label": "Environment stable throughout run?"},
+                    ],
+                },
+            },
         ],
         "rules": [
             {
@@ -345,3 +375,19 @@ class Command(BaseCommand):
                 )
             if not quiet:
                 self.stdout.write(f"    {instance.reference_number} [{instance.current_state.name}]")
+
+        # Forms are seeded last so form enforcement doesn't block the
+        # instance advancement above.
+        from apps.forms.models import FormDefinition
+
+        for f in spec.get("forms", []):
+            FormDefinition.objects.create(
+                workflow_definition=wf,
+                state=state_map[f["state"]],
+                name=f["name"],
+                schema=f["schema"],
+                version=1,
+                created_by=admin,
+            )
+            if not quiet:
+                self.stdout.write(f"    Form '{f['name']}' on state '{f['state']}'")

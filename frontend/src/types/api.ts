@@ -102,6 +102,42 @@ export interface SlaInfo {
   entered_at: string;
 }
 
+export interface FormField {
+  name: string;
+  type: "text" | "textarea" | "number" | "currency" | "checkbox" | "toggle" | "dropdown" | "date" | "datetime";
+  required?: boolean;
+  label?: string;
+  min?: number;
+  max?: number;
+  options?: string[];
+}
+
+export interface FormSchema {
+  required_to_transition?: boolean;
+  fields: FormField[];
+}
+
+export interface CurrentForm {
+  id: string;
+  name: string;
+  schema: FormSchema;
+  version: number;
+  required_to_transition: boolean;
+  submitted: boolean;
+  submission_data: Record<string, unknown> | null;
+  submitted_at: string | null;
+}
+
+export interface FormDefinitionApi {
+  id: string;
+  workflow_definition: string;
+  state: string;
+  name: string;
+  schema: FormSchema;
+  version: number;
+  created_at: string;
+}
+
 export interface WorkflowInstance {
   id: string;
   reference_number: string;
@@ -116,6 +152,7 @@ export interface WorkflowInstance {
   created_by: string;
   sla: SlaInfo | null;
   relationships: InstanceRelationship[];
+  current_form: CurrentForm | null;
 }
 
 export interface AuditEntry {

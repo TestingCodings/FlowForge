@@ -62,6 +62,14 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         submission = FormSubmission.objects.create(submitted_by=self.context["request"].user, **validated_data)
+
+        # Merge submitted values into instance metadata so rules can evaluate them
+        instance = submission.workflow_instance
+        merged = dict(instance.metadata_json or {})
+        merged.update(submission.data or {})
+        instance.metadata_json = merged
+        instance.save(update_fields=["metadata_json", "updated_at"])
+
         form_submitted(
             workflow_instance=submission.workflow_instance,
             actor=self.context["request"].user,
