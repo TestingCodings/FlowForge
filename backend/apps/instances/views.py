@@ -56,6 +56,16 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             result = perform_transition(instance, transition_id)
             create_tasks_for_state(instance, actions=result.actions)
         except WorkflowTransitionError as exc:
+            queue_event_notifications(
+                workflow_instance=instance,
+                event_trigger="rule_blocked",
+                context_data={
+                    "instance": {"reference_number": instance.reference_number},
+                    "transition": tr.name,
+                    "reason": str(exc),
+                    "actor": request.user.email,
+                },
+            )
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         transition_applied(
@@ -106,6 +116,15 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             payload={"body": body},
             ip_address=request.META.get("REMOTE_ADDR", ""),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+        queue_event_notifications(
+            workflow_instance=instance,
+            event_trigger="comment_added",
+            context_data={
+                "instance": {"reference_number": instance.reference_number},
+                "actor": request.user.email,
+                "comment": body,
+            },
         )
         return Response({"detail": "Comment added."}, status=status.HTTP_201_CREATED)
 

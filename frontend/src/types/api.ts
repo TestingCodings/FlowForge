@@ -102,6 +102,16 @@ export interface SlaInfo {
   entered_at: string;
 }
 
+export interface WebhookSubscription {
+  id: string;
+  workflow_definition: string | null;
+  workflow_name: string | null;
+  url: string;
+  events: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface FormField {
   name: string;
   type: "text" | "textarea" | "number" | "currency" | "checkbox" | "toggle" | "dropdown" | "date" | "datetime";

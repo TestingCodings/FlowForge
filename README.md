@@ -75,7 +75,8 @@ graph TD
 | State Graph | BFS-topological SVG diagram on every instance: green = path taken, grey = branch not reached, indigo pulse = current state |
 | Relationship Fields | Directional typed links between instances (`reported_in`, `blocks`, `part_of` ...) with debounced search picker and audit on both ends |
 | State Forms | Attach a typed, validated form to any state; required forms block transitions until submitted; values merge into metadata for rule evaluation; visual form editor |
-| SLA Breach Indicators | Amber/red badges on overdue instances; tinted rows in the table |
+| SLA Breach Indicators | Amber/red badges on overdue instances; tinted rows in the table; `check_slas` command records breaches to the audit trail and notifies subscribers, once per state entry |
+| Webhooks | Per-workflow or global HTTP subscriptions with event filters; JSON payloads signed with HMAC-SHA256 (`X-FlowForge-Signature`); pause/resume and delivery log |
 | Workflow Versioning | Publish a new version from any workflow; deep-clones all states, transitions, and rules as a draft; version history panel |
 | Role-Based Access | Five roles (`viewer` to `platform_admin`); enforced server-side on every API action, not just the UI |
 | Audit Trail / Timeline | Immutable log of every event rendered as a vertical timeline with actor, timestamp, and state delta |
@@ -228,9 +229,10 @@ The project is built in deliberate phases, each shipping a complete vertical sli
 | 3 | Dashboard analytics, seed workflows, user guide | Done |
 | 4 | API-layer role enforcement, SLA indicators, workflow versioning, instance relationships | Done |
 | 5 | Form schemas per state: structured data collection gating transitions, visual form editor | Done |
-| 6 | Notifications and webhooks, Docker Compose + PostgreSQL production setup | Planned |
-| 7 | Custom UI shell: per-workflow theming and layout overrides (Kanban, table, calendar) | Planned |
-| 8 | Packaged deployable apps (shippable white-label workflows) | Planned |
+| 6 | Webhooks (HMAC-signed), event notifications, scheduled SLA breach enforcement | Done |
+| 7 | Workspace theming, Docker Compose + PostgreSQL production setup | Planned |
+| 8 | Custom UI shell: per-workflow layout overrides (Kanban, table, calendar) | Planned |
+| 9 | Packaged deployable apps (shippable white-label workflows) | Planned |
 
 See [docs/VISION.md](docs/VISION.md) for the full platform architecture vision including the three-layer extensibility model.
 

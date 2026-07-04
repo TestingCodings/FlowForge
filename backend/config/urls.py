@@ -7,7 +7,11 @@ from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet
 from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
-from apps.notifications.views import NotificationLogViewSet, NotificationTemplateViewSet
+from apps.notifications.views import (
+    NotificationLogViewSet,
+    NotificationTemplateViewSet,
+    WebhookSubscriptionViewSet,
+)
 from apps.tasks.views import TaskViewSet
 from apps.workflows.views import WorkflowDefinitionViewSet, RuleViewSet, StateViewSet, TransitionViewSet
 from .health import health_check
@@ -25,6 +29,7 @@ router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"audit", AuditLogAdminViewSet, basename="audit")
 router.register(r"notification-templates", NotificationTemplateViewSet, basename="notification-template")
 router.register(r"notification-logs", NotificationLogViewSet, basename="notification-log")
+router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

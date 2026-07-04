@@ -18,6 +18,7 @@ class AuditActionType(models.TextChoices):
     METADATA_UPDATED = "metadata_updated", "Metadata Updated"
     RELATIONSHIP_ADDED = "relationship_added", "Relationship Added"
     RELATIONSHIP_REMOVED = "relationship_removed", "Relationship Removed"
+    SLA_BREACHED = "sla_breached", "SLA Breached"
 
 
 class AuditLog(models.Model):

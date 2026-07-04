@@ -616,6 +616,7 @@ export default function InstanceDetailPage() {
 function auditBadgeClass(action: string) {
   if (action === "comment")                    return "badge-initial";
   if (action === "metadata_updated")           return "badge-inactive";
+  if (action === "sla_breached")               return "badge-warning";
   if (action.includes("relationship"))         return "badge-role-workflow_designer";
   if (action.includes("transition"))           return "badge-active";
   if (action.includes("created"))              return "badge-active";
@@ -627,6 +628,7 @@ function auditBadgeClass(action: string) {
 function eventIcon(action: string) {
   if (action === "metadata_updated")           return "✎";
   if (action.includes("form"))                 return "📋";
+  if (action === "sla_breached")               return "⏱";
   if (action.includes("relationship_added"))   return "⇌";
   if (action.includes("relationship_removed")) return "✂";
   if (action.includes("transition"))           return "→";

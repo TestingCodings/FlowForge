@@ -85,12 +85,16 @@ Use concise prompts with structure:
 
 Avoid open-ended prompts like "build everything" or "refactor all".
 
-### 7. Prevent Redundant Tokens
+### 7. FlowForge-Specific Cost Hotspots
 
-- Do not ask for restatements of unchanged plans.
-- Do not reprint full files after small edits.
-- Summarise command output, keep only key lines.
-- Report only deltas since previous update.
+These are where tokens actually go in this repo. Rules learned from practice:
+
+- **Large frontend pages.** `WorkflowDetailPage.tsx` and `InstanceDetailPage.tsx` are 600-900 lines. Never read them whole to add a feature: grep for section markers / function names first, read only the target range. New panels go in `components/` as self-contained files mounted with one import + one JSX line (see `WebhooksPanel.tsx`).
+- **Test runs with coverage.** The default pytest config enforces 80% coverage and prints a full per-file table even for a module run. Use `--no-cov` for module-level iteration; let CI and the final full run check coverage.
+- **Playwright screenshot loops.** Screenshots are for final evidence, not debugging. Verify behaviour with API calls (curl / urllib against localhost:8000) first; screenshot once at the end. Login + JWT fetch pattern already exists in `docs/screenshots` history: reuse it verbatim.
+- **Django dev server staleness.** After adding routes or models, confirm the runserver picked up the change (hit the new endpoint) before debugging "missing" endpoints at length. Kill + restart is cheaper than three rounds of investigation.
+- **Backend structure is uniform.** Every app follows models / serializers / views / tests + router registration in `config/urls.py`. Copy the nearest existing pattern instead of re-deriving one (permissions: `apps/accounts/permissions.py`; events: `queue_event_notifications`; audit: `apps/audit/services.py`).
+- **Nullable-FK "global" filters.** `field__in=[x, None]` never matches NULL rows; use `Q(field=x) | Q(field__isnull=True)`. This bug cost two debugging rounds; do not reintroduce it.
 
 ### 8. Branch and Commit Strategy
 
