@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
-import { WorkflowInstance, Workflow, SlaInfo } from "../types/api";
+import { WorkflowInstance, Workflow, Transition, SlaInfo } from "../types/api";
+
+interface BulkResult {
+  transition: string;
+  requested: number;
+  succeeded: number;
+  failed: number;
+  results: { id: string; reference_number?: string; status: string; detail: string }[];
+}
 
 function SlaBadge({ sla }: { sla: SlaInfo | null | undefined }) {
   if (!sla || sla.status === "ok") return null;
@@ -31,6 +39,11 @@ export default function InstancesPage() {
   const [selectedWf, setSelectedWf] = useState("");
   const [createError, setCreateError] = useState("");
 
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkTransitionId, setBulkTransitionId] = useState("");
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
+
   const { data: instances = [], isLoading } = useQuery<WorkflowInstance[]>({
     queryKey: ["instances"],
     queryFn: async () => (await apiClient.get("/instances/")).data.results ?? [],
@@ -56,6 +69,68 @@ export default function InstancesPage() {
   const filtered = filterWorkflow
     ? instances.filter((i) => i.workflow_definition_name.toLowerCase().includes(filterWorkflow.toLowerCase()))
     : instances;
+
+  /* ── Bulk selection helpers ── */
+  const toggleRow = (id: string) =>
+    setSelected(cur => {
+      const next = new Set(cur);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(i => selected.has(i.id));
+  const toggleAll = () =>
+    setSelected(allFilteredSelected ? new Set() : new Set(filtered.map(i => i.id)));
+
+  // Bulk transition is offered when every selected instance shares one workflow
+  const selectedInstances = useMemo(
+    () => instances.filter(i => selected.has(i.id)),
+    [instances, selected],
+  );
+  const commonWorkflowId = useMemo(() => {
+    const ids = new Set(selectedInstances.map(i => i.workflow_definition));
+    return ids.size === 1 ? [...ids][0] : null;
+  }, [selectedInstances]);
+
+  const { data: commonWorkflow } = useQuery<Workflow>({
+    queryKey: ["workflow", commonWorkflowId],
+    queryFn: async () => (await apiClient.get(`/workflows/${commonWorkflowId}/`)).data,
+    enabled: Boolean(commonWorkflowId),
+  });
+
+  // Only transitions leaving a state that at least one selected instance is in
+  const bulkTransitions: Transition[] = useMemo(() => {
+    if (!commonWorkflow) return [];
+    const statesInUse = new Set(selectedInstances.map(i => i.current_state));
+    return (commonWorkflow.transitions ?? []).filter(t => statesInUse.has(t.from_state));
+  }, [commonWorkflow, selectedInstances]);
+
+  const bulkMutation = useMutation({
+    mutationFn: async () =>
+      (await apiClient.post("/instances/bulk-transition/", {
+        instance_ids: [...selected],
+        transition_id: bulkTransitionId,
+      })).data as BulkResult,
+    onSuccess: (data) => {
+      setBulkResult(data);
+      setSelected(new Set());
+      setBulkTransitionId("");
+      qc.invalidateQueries({ queryKey: ["instances"] });
+    },
+  });
+
+  const exportCsv = async () => {
+    const resp = await apiClient.get(
+      `/instances/export/?ids=${[...selected].join(",")}`,
+      { responseType: "blob" },
+    );
+    const url = URL.createObjectURL(resp.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instances.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const activeCount = instances.filter((i) => !(i as any).completed_at).length;
   const doneCount = instances.filter((i) => (i as any).completed_at).length;
@@ -101,15 +176,76 @@ export default function InstancesPage() {
         </div>
       )}
 
+      {/* Bulk result summary */}
+      {bulkResult && (
+        <div className={`alert ${bulkResult.failed === 0 ? "alert-success" : "alert-error"}`} style={{ marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <strong>
+              Bulk "{bulkResult.transition}": {bulkResult.succeeded} succeeded
+              {bulkResult.failed > 0 && `, ${bulkResult.failed} failed`}
+            </strong>
+            {bulkResult.failed > 0 && (
+              <ul style={{ margin: "6px 0 0 16px", fontSize: "0.82rem" }}>
+                {bulkResult.results.filter(r => r.status !== "ok").map(r => (
+                  <li key={r.id}>
+                    <span style={{ fontFamily: "monospace" }}>{r.reference_number ?? r.id}</span>: {r.detail}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button className="btn-ghost btn-sm" onClick={() => setBulkResult(null)}>✕</button>
+        </div>
+      )}
+
       <div className="card">
-        {/* Filter bar */}
-        <div style={{ marginBottom: 14 }}>
+        {/* Filter bar + bulk actions */}
+        <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <input
             placeholder="Filter by workflow name…"
             value={filterWorkflow}
             onChange={(e) => setFilterWorkflow(e.target.value)}
             style={{ maxWidth: 300 }}
           />
+
+          {selected.size > 0 && (
+            <div style={{
+              display: "flex", gap: 8, alignItems: "center", marginLeft: "auto",
+              padding: "6px 12px", borderRadius: 8,
+              background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.3)",
+            }}>
+              <span className="text-sm" style={{ fontWeight: 600 }}>{selected.size} selected</span>
+
+              {commonWorkflowId ? (
+                <>
+                  <select
+                    value={bulkTransitionId}
+                    onChange={e => setBulkTransitionId(e.target.value)}
+                    style={{ fontSize: "0.82rem", padding: "4px 8px" }}
+                  >
+                    <option value="">Transition…</option>
+                    {bulkTransitions.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.display_name || t.name}{t.requires_approval ? " (approval)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-primary btn-sm"
+                    disabled={!bulkTransitionId || bulkMutation.isPending}
+                    onClick={() => bulkMutation.mutate()}
+                  >
+                    {bulkMutation.isPending ? "Applying…" : "Apply"}
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-muted">select one workflow to transition</span>
+              )}
+
+              <button className="btn-secondary btn-sm" onClick={exportCsv}>Export CSV</button>
+              <button className="btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear</button>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -122,6 +258,9 @@ export default function InstancesPage() {
           <table className="table">
             <thead>
               <tr>
+                <th style={{ width: 32 }}>
+                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} />
+                </th>
                 <th>Reference</th>
                 <th>Workflow</th>
                 <th>Current State</th>
@@ -141,6 +280,13 @@ export default function InstancesPage() {
                   : undefined;
                 return (
                   <tr key={inst.id} style={rowStyle}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(inst.id)}
+                        onChange={() => toggleRow(inst.id)}
+                      />
+                    </td>
                     <td>
                       <Link to={`/instances/${inst.id}`} style={{ fontFamily: "monospace", fontSize: "0.875rem" }}>
                         {inst.reference_number}

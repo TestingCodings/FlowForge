@@ -261,6 +261,112 @@ class TestTransitionEndpoint:
 
 
 @pytest.mark.django_db
+class TestBulkOperations:
+    def _create_instances(self, client, wf_id, n):
+        ids = []
+        for _ in range(n):
+            resp = client.post("/api/instances/", {"workflow_definition": str(wf_id)}, format="json")
+            assert resp.status_code == status.HTTP_201_CREATED
+            ids.append(resp.data["id"])
+        return ids
+
+    def test_bulk_transition_advances_all(self):
+        client, user = _auth_client()
+        wf, s_draft, s_review, *_ , t_submit, _ = _simple_workflow(user)
+        ids = self._create_instances(client, wf.id, 3)
+
+        resp = client.post(
+            "/api/instances/bulk-transition/",
+            {"instance_ids": ids, "transition_id": str(t_submit.id)},
+            format="json",
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["succeeded"] == 3
+        assert resp.data["failed"] == 0
+        assert all(r["status"] == "ok" for r in resp.data["results"])
+
+        from apps.instances.models import WorkflowInstance
+
+        assert (
+            WorkflowInstance.objects.filter(id__in=ids, current_state=s_review).count() == 3
+        )
+
+    def test_bulk_transition_reports_partial_failures(self):
+        client, user = _auth_client()
+        wf, s_draft, s_review, s_approved, t_submit, t_approve = _simple_workflow(user)
+        ids = self._create_instances(client, wf.id, 3)
+
+        # Advance one instance to Review so t_submit is invalid for it
+        client.post(
+            f"/api/instances/{ids[0]}/transition/",
+            {"transition_id": str(t_submit.id)},
+            format="json",
+        )
+
+        resp = client.post(
+            "/api/instances/bulk-transition/",
+            {"instance_ids": ids, "transition_id": str(t_submit.id)},
+            format="json",
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["succeeded"] == 2
+        assert resp.data["failed"] == 1
+        by_id = {r["id"]: r for r in resp.data["results"]}
+        assert by_id[ids[0]]["status"] == "blocked"
+
+    def test_bulk_transition_validates_input(self):
+        client, user = _auth_client()
+        wf, *_ , t_submit, _ = _simple_workflow(user)
+
+        resp = client.post(
+            "/api/instances/bulk-transition/",
+            {"instance_ids": [], "transition_id": str(t_submit.id)},
+            format="json",
+        )
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+        resp = client.post(
+            "/api/instances/bulk-transition/",
+            {"instance_ids": ["not-a-uuid"], "transition_id": str(t_submit.id)},
+            format="json",
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["results"][0]["status"] == "error"
+
+    def test_direct_instance_update_and_delete_are_blocked(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        iid = self._create_instances(client, wf.id, 1)[0]
+
+        assert client.patch(f"/api/instances/{iid}/", {"metadata_json": {}}, format="json").status_code == 405
+        assert client.delete(f"/api/instances/{iid}/").status_code == 405
+        # ...while the metadata action endpoint accepts PATCH
+        resp = client.patch(
+            f"/api/instances/{iid}/metadata/", {"metadata_json": {"k": 1}}, format="json"
+        )
+        assert resp.status_code == 200
+
+    def test_export_csv_includes_metadata_columns(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        ids = self._create_instances(client, wf.id, 2)
+        client.patch(
+            f"/api/instances/{ids[0]}/metadata/",
+            {"metadata_json": {"priority": "high"}},
+            format="json",
+        )
+
+        resp = client.get(f"/api/instances/export/?ids={','.join(ids)}")
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp["Content-Type"] == "text/csv"
+        body = resp.content.decode()
+        lines = [l for l in body.strip().splitlines() if l]
+        assert len(lines) == 3  # header + 2 rows
+        assert "metadata.priority" in lines[0]
+        assert "high" in body
+
+
+@pytest.mark.django_db
 class TestAuditTrailOnTransition:
     def test_audit_log_created_after_transition(self):
         from apps.audit.models import AuditLog

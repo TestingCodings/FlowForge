@@ -82,6 +82,7 @@ graph TD
 | Audit Trail / Timeline | Immutable log of every event rendered as a vertical timeline with actor, timestamp, and state delta |
 | Metadata Editor | Add/edit key-value fields on any live instance; values auto-coerced to number/boolean/string |
 | Dashboard Charts | Activity area chart (14 days), instances-by-state bar, active/completed stacked bar by workflow |
+| Bulk Operations | Select up to 100 instances: fire one transition across all with per-instance results, or export the selection (with flattened metadata columns) as CSV |
 | Demo User Switcher | Flip between admin/approver/participant in one browser tab to demonstrate role differences live |
 | Seed Command | `python manage.py seed --reset` - idempotent demo data with full audit trails; `--testrail` adds a three-workflow test management suite |
 
@@ -230,9 +231,10 @@ The project is built in deliberate phases, each shipping a complete vertical sli
 | 4 | API-layer role enforcement, SLA indicators, workflow versioning, instance relationships | Done |
 | 5 | Form schemas per state: structured data collection gating transitions, visual form editor | Done |
 | 6 | Webhooks (HMAC-signed), event notifications, scheduled SLA breach enforcement | Done |
-| 7 | Workspace theming, Docker Compose + PostgreSQL production setup | Planned |
-| 8 | Custom UI shell: per-workflow layout overrides (Kanban, table, calendar) | Planned |
-| 9 | Packaged deployable apps (shippable white-label workflows) | Planned |
+| 7 | Bulk operations: multi-select transition with per-instance results, CSV export | Done |
+| 8 | Workspace theming, Docker Compose + PostgreSQL production setup | Planned |
+| 9 | Custom UI shell: per-workflow layout overrides (Kanban, table, calendar) | Planned |
+| 10 | Packaged deployable apps (shippable white-label workflows) | Planned |
 
 See [docs/VISION.md](docs/VISION.md) for the full platform architecture vision including the three-layer extensibility model.
 
