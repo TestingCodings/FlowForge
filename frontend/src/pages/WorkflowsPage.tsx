@@ -1,13 +1,39 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../api/client";
 import { Workflow } from "../types/api";
 
 export default function WorkflowsPage() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importErr, setImportErr] = useState<string | null>(null);
+
   const { data = [], isLoading } = useQuery<Workflow[]>({
     queryKey: ["workflows"],
     queryFn: async () => (await apiClient.get("/workflows/")).data.results ?? [],
   });
+
+  const importMutation = useMutation({
+    mutationFn: async (bundle: unknown) =>
+      (await apiClient.post("/workflows/import/", bundle)).data,
+    onSuccess: (wf) => {
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      setImportErr(null);
+      navigate(`/workflows/${wf.id}`);
+    },
+    onError: (e: any) => setImportErr(e?.response?.data?.detail ?? "Import failed"),
+  });
+
+  const onImportFile = async (file: File) => {
+    try {
+      const bundle = JSON.parse(await file.text());
+      importMutation.mutate(bundle);
+    } catch {
+      setImportErr("That file is not valid JSON.");
+    }
+  };
 
   const active = data.filter((w) => w.is_active).length;
 
@@ -18,10 +44,35 @@ export default function WorkflowsPage() {
           <h2>Workflows</h2>
           <p>{data.length} definitions · {active} active</p>
         </div>
-        <Link to="/workflows/new">
-          <button className="btn-primary">+ Create Workflow</button>
-        </Link>
+        <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) onImportFile(f); e.target.value = ""; }}
+          />
+          <button
+            className="btn-secondary"
+            onClick={() => fileRef.current?.click()}
+            disabled={importMutation.isPending}
+            title="Import a .flowforge.json bundle exported from any FlowForge install"
+          >
+            {importMutation.isPending ? "Importing…" : "Import"}
+          </button>
+          <Link to="/workflows/new">
+            <button className="btn-primary">+ Create Workflow</button>
+          </Link>
+        </div>
       </div>
+
+      {importErr && (
+        <div className="alert alert-error mb-4">
+          <span>⚠</span>
+          <div style={{ flex: 1 }}>{importErr}</div>
+          <button className="btn-ghost btn-sm" onClick={() => setImportErr(null)}>✕</button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-2">
@@ -52,6 +103,9 @@ export default function WorkflowsPage() {
                     {wf.is_active ? "Active" : "Inactive"}
                   </span>
                   <span className="badge badge-inactive">v{wf.version}</span>
+                  {wf.ui_schema?.shell === "kanban" && (
+                    <span className="badge badge-initial">kanban</span>
+                  )}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1rem", marginBottom: 4 }}>{wf.name}</div>
                 <div className="text-sm text-muted">{wf.description || "No description"}</div>

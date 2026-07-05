@@ -84,3 +84,40 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f"{self.user.email} — {self.role}"
+
+
+DEFAULT_THEME = {
+    "accent": "#6366f1",
+    "accent_light": "#818cf8",
+    "bg_base": "#0d1117",
+    "bg_surface": "#161b22",
+    "bg_elevated": "#21262d",
+    "text_primary": "#e6edf3",
+    "success": "#3fb950",
+    "warning": "#d29922",
+    "danger": "#f85149",
+}
+
+
+class Workspace(models.Model):
+    """Singleton platform-level branding and UI configuration (VISION Layer 1)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, default="FlowForge")
+    tagline = models.CharField(max_length=150, blank=True, default="Workflow Automation")
+    logo_url = models.URLField(max_length=500, blank=True)
+    ui_config = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "workspace"
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def current(cls):
+        ws = cls.objects.first()
+        if ws is None:
+            ws = cls.objects.create(ui_config={"theme": DEFAULT_THEME})
+        return ws

@@ -20,6 +20,8 @@ class WorkflowDefinition(models.Model):
         related_name="child_versions",
     )
     is_active = models.BooleanField(default=False)
+    # VISION Layer 2: presentation schema, e.g. {"shell": "kanban", "card_fields": [...]}
+    ui_schema = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

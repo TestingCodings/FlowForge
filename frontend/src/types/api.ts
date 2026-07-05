@@ -53,6 +53,20 @@ export interface Rule {
   priority: number;
 }
 
+export interface WorkflowUiSchema {
+  shell?: "list" | "kanban";
+  card_fields?: string[];
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  tagline: string;
+  logo_url: string;
+  ui_config: { theme?: Record<string, string> };
+  updated_at: string;
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -62,6 +76,7 @@ export interface Workflow {
   published_at: string | null;
   parent: string | null;
   is_active: boolean;
+  ui_schema: WorkflowUiSchema;
   created_at: string;
   updated_at: string;
   states: State[];

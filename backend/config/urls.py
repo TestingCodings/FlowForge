@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet
+from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet, WorkspaceView
 from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
@@ -38,6 +38,7 @@ urlpatterns = [
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
+    path("api/workspace/", WorkspaceView.as_view(), name="workspace"),
     path("api/audit/<uuid:instance_id>/", AuditTrailByInstanceView.as_view(), name="audit-by-instance"),
     path("api/", include(router.urls)),
     # Health

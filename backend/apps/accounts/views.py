@@ -73,3 +73,38 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             UserRole.objects.create(user=user, role=role)
 
         return Response(UserSerializer(user).data)
+
+
+class WorkspaceView(generics.GenericAPIView):
+    """Singleton workspace config: any authenticated user reads, platform_admin writes."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import Workspace
+
+        ws = Workspace.current()
+        return Response({
+            "id": str(ws.id),
+            "name": ws.name,
+            "tagline": ws.tagline,
+            "logo_url": ws.logo_url,
+            "ui_config": ws.ui_config,
+            "updated_at": ws.updated_at.isoformat(),
+        })
+
+    def put(self, request):
+        from .models import Workspace
+        from .permissions import require_role
+
+        require_role(request.user, "platform_admin", action="edit workspace settings")
+        ws = Workspace.current()
+        for field in ("name", "tagline", "logo_url"):
+            if field in request.data:
+                setattr(ws, field, request.data[field] or "")
+        if "ui_config" in request.data:
+            if not isinstance(request.data["ui_config"], dict):
+                return Response({"detail": "ui_config must be an object."}, status=400)
+            ws.ui_config = request.data["ui_config"]
+        ws.save()
+        return self.get(request)

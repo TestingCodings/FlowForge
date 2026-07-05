@@ -147,6 +147,24 @@ export default function WorkflowDetailPage() {
     enabled: Boolean(id),
   });
 
+  const uiSchemaMutation = useMutation({
+    mutationFn: async (shell: "list" | "kanban") =>
+      (await apiClient.patch(`/workflows/${id}/ui-schema/`, {
+        ui_schema: { ...(wf?.ui_schema ?? {}), shell },
+      })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["workflow", id] }),
+  });
+
+  const exportBundle = async () => {
+    const resp = await apiClient.get(`/workflows/${id}/export/`, { responseType: "blob" });
+    const url = URL.createObjectURL(resp.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(wf?.name ?? "workflow").toLowerCase().replace(/[^a-z0-9-_]+/g, "-")}-v${wf?.version ?? 1}.flowforge.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* ─── State forms ─── */
   const { data: stateForms = [] } = useQuery<FormDefinitionApi[]>({
     queryKey: ["stateForms", id],
@@ -238,6 +256,27 @@ export default function WorkflowDetailPage() {
           <span className="badge badge-inactive">
             v{wf.version}{wf.published_at ? "" : " · draft"}
           </span>
+          <select
+            value={wf.ui_schema?.shell ?? "list"}
+            onChange={e => uiSchemaMutation.mutate(e.target.value as "list" | "kanban")}
+            title="Presentation shell for this workflow (Layer 2)"
+            style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+          >
+            <option value="list">List shell</option>
+            <option value="kanban">Kanban shell</option>
+          </select>
+          {(wf.ui_schema?.shell === "kanban") && (
+            <Link to={`/workflows/${id}/board`} className="btn-primary btn-sm" style={{ textDecoration: "none" }}>
+              Open board
+            </Link>
+          )}
+          <button
+            className="btn-secondary btn-sm"
+            onClick={exportBundle}
+            title="Download this workflow as a portable .flowforge.json bundle"
+          >
+            Export
+          </button>
           <button
             className="btn-secondary btn-sm"
             onClick={() => publishNewVersion.mutate()}

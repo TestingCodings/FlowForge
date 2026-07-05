@@ -165,7 +165,7 @@ The exported app has no FlowForge branding. It *is* the tool — it just happens
 
 To get from "configurable process engine" to "application factory" you need a handful of additional primitives. Everything else can be composed from these:
 
-> **Status (July 2026):** all seven primitives are shipped. Remaining: the Layer 1–3 presentation work (workspace theming, UI shells, deployable apps).
+> **Status (July 2026):** all seven primitives are shipped, plus first slices of each layer: Layer 1 workspace theming (Workspace model + live theme editor), Layer 2 kanban shell (`ui_schema` + drag-to-transition board), and the Layer 3 foundation (portable workflow bundles with export/import). Remaining: more shells (table, calendar, matrix), the UI schema builder, and full app export/hosting.
 
 ### 1. Relationship Fields (Cross-workflow linking)
 Instances that reference other instances as first-class foreign keys, not just metadata strings.

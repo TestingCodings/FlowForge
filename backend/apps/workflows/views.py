@@ -127,6 +127,54 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
 
         return Response(WorkflowDefinitionSerializer(versions, many=True).data)
 
+    @action(detail=True, methods=["patch"], url_path="ui-schema")
+    def update_ui_schema(self, request, pk=None):
+        """Set the presentation schema (Layer 2). workflow_designer+."""
+        require_min_role(request.user, "workflow_designer", action="edit workflow UI schema")
+        wf = self.get_object()
+        ui_schema = request.data.get("ui_schema")
+        if not isinstance(ui_schema, dict):
+            return Response({"detail": "ui_schema must be an object."}, status=400)
+        shell = ui_schema.get("shell", "list")
+        if shell not in ("list", "kanban"):
+            return Response({"detail": f"Unknown shell '{shell}'. Valid: list, kanban."}, status=400)
+        wf.ui_schema = ui_schema
+        wf.save(update_fields=["ui_schema", "updated_at"])
+        return Response(WorkflowDefinitionSerializer(wf).data)
+
+    @action(detail=True, methods=["get"], url_path="export")
+    def export_bundle(self, request, pk=None):
+        """Download the workflow as a portable JSON bundle (Layer 3)."""
+        from django.http import JsonResponse
+
+        from .portability import export_workflow
+
+        wf = self.get_object()
+        bundle = export_workflow(wf)
+        response = JsonResponse(bundle, json_dumps_params={"indent": 2})
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in wf.name.lower())
+        response["Content-Disposition"] = f'attachment; filename="{safe_name}-v{wf.version}.flowforge.json"'
+        return response
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_bundle(self, request):
+        """Create a workflow from a bundle. workflow_designer+.
+
+        POST body: the bundle JSON, optionally wrapped as {"bundle": ..., "name": "New Name"}.
+        """
+        from .portability import BundleError, import_workflow
+
+        require_min_role(request.user, "workflow_designer", action="import a workflow")
+        bundle = request.data.get("bundle") if "bundle" in request.data else request.data
+        rename = request.data.get("name") if "bundle" in request.data else None
+        if not isinstance(bundle, dict):
+            return Response({"detail": "Request body must be a bundle object."}, status=400)
+        try:
+            wf = import_workflow(bundle, created_by=request.user, rename=rename)
+        except BundleError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response(WorkflowDefinitionSerializer(wf).data, status=status.HTTP_201_CREATED)
+
 
 class StateViewSet(viewsets.ModelViewSet):
     queryset = State.objects.select_related("workflow_definition").all()

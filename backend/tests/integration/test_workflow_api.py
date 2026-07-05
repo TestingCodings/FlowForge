@@ -386,3 +386,124 @@ class TestAuditTrailOnTransition:
 
         after = AuditLog.objects.filter(workflow_instance_id=instance_id).count()
         assert after > before
+
+
+# ---------------------------------------------------------------------------
+# VISION Layers: workspace theming, ui_schema, export/import
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestWorkspaceTheming:
+    def test_get_returns_default_workspace(self):
+        client, _ = _auth_client()
+        resp = client.get("/api/workspace/")
+        assert resp.status_code == 200
+        assert resp.data["name"] == "FlowForge"
+        assert "theme" in resp.data["ui_config"]
+
+    def test_put_updates_theme_for_admin(self):
+        client, _ = _auth_client()  # platform_admin via helper
+        resp = client.put(
+            "/api/workspace/",
+            {"name": "Acme Corp", "ui_config": {"theme": {"accent": "#0052cc"}}},
+            format="json",
+        )
+        assert resp.status_code == 200
+        assert resp.data["name"] == "Acme Corp"
+        assert resp.data["ui_config"]["theme"]["accent"] == "#0052cc"
+
+    def test_put_denied_for_non_admin(self):
+        from conftest import give_role
+        from tests.factories import UserFactory
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        user = UserFactory(password="StrongPass123!")
+        give_role(user, "viewer")
+        client = APIClient()
+        login = client.post(
+            reverse("auth-login"),
+            {"email": user.email, "password": "StrongPass123!"},
+            format="json",
+        )
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        resp = client.put("/api/workspace/", {"name": "Hacked"}, format="json")
+        assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+class TestUiSchema:
+    def test_set_kanban_shell(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        resp = client.patch(
+            f"/api/workflows/{wf.id}/ui-schema/",
+            {"ui_schema": {"shell": "kanban", "card_fields": ["priority"]}},
+            format="json",
+        )
+        assert resp.status_code == 200
+        assert resp.data["ui_schema"]["shell"] == "kanban"
+
+    def test_unknown_shell_rejected(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        resp = client.patch(
+            f"/api/workflows/{wf.id}/ui-schema/",
+            {"ui_schema": {"shell": "hologram"}},
+            format="json",
+        )
+        assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+class TestWorkflowPortability:
+    def test_export_import_round_trip(self):
+        from apps.workflows.models import Rule
+
+        client, user = _auth_client()
+        wf, s_draft, s_review, s_approved, t_submit, t_approve = _simple_workflow(user)
+        Rule.objects.create(
+            workflow_definition=wf,
+            transition=t_approve,
+            condition={"field": "value", "operator": "gt", "value": 100},
+            action={"type": "block_transition", "reason": "Too big"},
+            priority=1,
+        )
+
+        resp = client.get(f"/api/workflows/{wf.id}/export/")
+        assert resp.status_code == 200
+        import json as json_mod
+
+        bundle = json_mod.loads(resp.content)
+        assert bundle["kind"] == "flowforge.workflow"
+        assert len(bundle["states"]) == 3
+        assert len(bundle["transitions"]) == 2
+        assert len(bundle["rules"]) == 1
+
+        # Import under a new name
+        resp = client.post(
+            "/api/workflows/import/",
+            {"bundle": bundle, "name": f"{wf.name} (copy)"},
+            format="json",
+        )
+        assert resp.status_code == 201, resp.data
+        new_id = resp.data["id"]
+        assert new_id != str(wf.id)
+        assert len(resp.data["states"]) == 3
+        assert len(resp.data["transitions"]) == 2
+
+        # The imported workflow is fully functional: create + transition an instance
+        inst = client.post("/api/instances/", {"workflow_definition": new_id}, format="json")
+        assert inst.status_code == 201
+
+    def test_import_duplicate_name_rejected(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        resp = client.get(f"/api/workflows/{wf.id}/export/")
+        import json as json_mod
+
+        bundle = json_mod.loads(resp.content)
+        resp = client.post("/api/workflows/import/", bundle, format="json")
+        assert resp.status_code == 400
+        assert "already exists" in resp.data["detail"]

@@ -31,6 +31,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     # patch/delete are needed for the custom metadata and unlink actions;
     # the default update/partial_update/destroy routes are blocked below.
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["workflow_definition", "current_state"]
 
     def create(self, request, *args, **kwargs):
         require_min_role(request.user, "participant", action="create a workflow instance")

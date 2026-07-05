@@ -65,6 +65,7 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "published_at",
             "parent",
             "is_active",
+            "ui_schema",
             "created_by",
             "created_at",
             "updated_at",

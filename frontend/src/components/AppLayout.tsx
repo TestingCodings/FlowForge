@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { UserProfile } from "../types/api";
+import { useWorkspace } from "../hooks/useWorkspace";
 
 const NAV = [
   {
@@ -24,9 +25,10 @@ const NAV = [
   {
     section: "Administration",
     links: [
-      { to: "/admin/audit", label: "Audit Log",  icon: <AuditIcon /> },
-      { to: "/admin/users", label: "Users",      icon: <UsersIcon /> },
-      { to: "/help",        label: "User Guide", icon: <HelpIcon /> },
+      { to: "/admin/audit",     label: "Audit Log",  icon: <AuditIcon /> },
+      { to: "/admin/users",     label: "Users",      icon: <UsersIcon /> },
+      { to: "/admin/workspace", label: "Workspace",  icon: <WorkflowIcon /> },
+      { to: "/help",            label: "User Guide", icon: <HelpIcon /> },
     ],
   },
 ];
@@ -56,6 +58,8 @@ export default function AppLayout() {
     queryFn: async () => (await apiClient.get("/auth/me/")).data,
     retry: false,
   });
+
+  const { data: workspace } = useWorkspace();
 
   const { data: allUsers = [] } = useQuery<UserProfile[]>({
     queryKey: ["users"],
@@ -98,8 +102,20 @@ export default function AppLayout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <h1>FlowForge</h1>
-          <p>Workflow Automation</p>
+          {workspace?.logo_url ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <img src={workspace.logo_url} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
+              <div>
+                <h1>{workspace.name}</h1>
+                <p>{workspace.tagline}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1>{workspace?.name ?? "FlowForge"}</h1>
+              <p>{workspace?.tagline ?? "Workflow Automation"}</p>
+            </>
+          )}
         </div>
 
         <nav className="sidebar-nav">
