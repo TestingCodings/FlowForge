@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiClient } from "../api/client";
 import { AuditEntry } from "../types/api";
+import { formatDateTime } from "../hooks/useWorkspace";
 
 export default function AuditPage() {
   const [search, setSearch] = useState("");
@@ -82,7 +83,7 @@ export default function AuditPage() {
                   <td className="text-sm">{entry.to_state ?? "—"}</td>
                   <td className="text-sm">{entry.actor_email ?? entry.actor ?? "—"}</td>
                   <td className="text-muted text-sm">
-                    {new Date(entry.created_at).toLocaleString()}
+                    {formatDateTime(entry.created_at)}
                   </td>
                 </tr>
               ))}

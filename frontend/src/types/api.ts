@@ -53,9 +53,15 @@ export interface Rule {
   priority: number;
 }
 
+export type ShellName = "list" | "kanban" | "table" | "calendar";
+
 export interface WorkflowUiSchema {
-  shell?: "list" | "kanban";
+  shell?: ShellName;
   card_fields?: string[];
+  list_columns?: string[];
+  date_field?: string;
+  title_field?: string;
+  state_display?: Record<string, { colour?: string }>;
 }
 
 export interface Workspace {
@@ -63,7 +69,11 @@ export interface Workspace {
   name: string;
   tagline: string;
   logo_url: string;
-  ui_config: { theme?: Record<string, string> };
+  ui_config: {
+    theme?: Record<string, string>;
+    font?: string;
+    date_format?: string;
+  };
   updated_at: string;
 }
 

@@ -8,6 +8,7 @@ import {
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
+import { formatDateTime } from "../hooks/useWorkspace";
 
 /* ─── Role capability helpers ─── */
 const CAN_DO_ANYTHING = new Set(["platform_admin", "workflow_designer"]);
@@ -491,7 +492,7 @@ export default function InstanceDetailPage() {
           {instance.completed_at && !editingMeta && (
             <>
               <div className="divider" />
-              <div className="text-sm text-muted">Completed {new Date(instance.completed_at).toLocaleString()}</div>
+              <div className="text-sm text-muted">Completed {formatDateTime(instance.completed_at)}</div>
             </>
           )}
         </div>
@@ -600,7 +601,7 @@ export default function InstanceDetailPage() {
 
                     <div className="flex gap-3 text-xs text-muted" style={{ flexWrap: "wrap" }}>
                       <span>{entry.actor_email || "System"}</span>
-                      <span>{new Date(entry.created_at).toLocaleString()}</span>
+                      <span>{formatDateTime(entry.created_at)}</span>
                     </div>
                   </div>
                 </div>
@@ -714,7 +715,7 @@ function StateFormPanel({
         </table>
         {form.submitted_at && (
           <div className="text-xs text-muted" style={{ marginTop: 8 }}>
-            Submitted {new Date(form.submitted_at).toLocaleString()}
+            Submitted {formatDateTime(form.submitted_at)}
           </div>
         )}
       </div>

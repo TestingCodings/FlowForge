@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { UserProfile, ALL_ROLES, RoleName } from "../types/api";
+import { formatDate } from "../hooks/useWorkspace";
 
 export default function UsersPage() {
   const qc = useQueryClient();
@@ -95,7 +96,7 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="text-muted text-sm">
-                      {new Date(user.date_joined).toLocaleDateString()}
+                      {formatDate(user.date_joined)}
                     </td>
                     <td>
                       <div className="flex gap-2 items-center">

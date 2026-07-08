@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { WorkflowInstance, Workflow, Transition, SlaInfo } from "../types/api";
+import { formatDate } from "../hooks/useWorkspace";
 
 interface BulkResult {
   transition: string;
@@ -311,7 +312,7 @@ export default function InstancesPage() {
                       </span>
                     </td>
                     <td className="text-muted text-sm">
-                      {new Date(inst.created_at).toLocaleDateString()}
+                      {formatDate(inst.created_at)}
                     </td>
                   </tr>
                 );

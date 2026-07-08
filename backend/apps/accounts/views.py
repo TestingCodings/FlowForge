@@ -103,8 +103,25 @@ class WorkspaceView(generics.GenericAPIView):
             if field in request.data:
                 setattr(ws, field, request.data[field] or "")
         if "ui_config" in request.data:
-            if not isinstance(request.data["ui_config"], dict):
+            ui = request.data["ui_config"]
+            if not isinstance(ui, dict):
                 return Response({"detail": "ui_config must be an object."}, status=400)
-            ws.ui_config = request.data["ui_config"]
+            theme = ui.get("theme", {})
+            if not isinstance(theme, dict) or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in theme.items()
+            ):
+                return Response(
+                    {"detail": "ui_config.theme must map token names to colour strings."}, status=400
+                )
+            for key, valid in (
+                ("font", {"inter", "system", "serif", "mono"}),
+                ("date_format", {"locale", "dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"}),
+            ):
+                if key in ui and ui[key] not in valid:
+                    return Response(
+                        {"detail": f"ui_config.{key} must be one of: {', '.join(sorted(valid))}."},
+                        status=400,
+                    )
+            ws.ui_config = ui
         ws.save()
         return self.get(request)
