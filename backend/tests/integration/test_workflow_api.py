@@ -507,3 +507,44 @@ class TestWorkflowPortability:
         resp = client.post("/api/workflows/import/", bundle, format="json")
         assert resp.status_code == 400
         assert "already exists" in resp.data["detail"]
+
+
+@pytest.mark.django_db
+class TestUiSchemaValidation:
+    def _patch(self, client, wf_id, ui_schema):
+        return client.patch(f"/api/workflows/{wf_id}/ui-schema/", {"ui_schema": ui_schema}, format="json")
+
+    def test_all_four_shells_accepted(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        for shell in ("list", "kanban", "table", "calendar"):
+            resp = self._patch(client, wf.id, {"shell": shell})
+            assert resp.status_code == 200, (shell, resp.data)
+
+    def test_config_shapes_validated(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        assert self._patch(client, wf.id, {"shell": "table", "list_columns": "reference"}).status_code == 400
+        assert self._patch(client, wf.id, {"shell": "kanban", "card_fields": [1, 2]}).status_code == 400
+        assert self._patch(client, wf.id, {"shell": "calendar", "date_field": ""}).status_code == 400
+        assert self._patch(client, wf.id, {"shell": "kanban", "state_display": "red"}).status_code == 400
+        ok = self._patch(client, wf.id, {
+            "shell": "table",
+            "list_columns": ["reference", "state", "metadata.priority"],
+            "title_field": "title",
+            "state_display": {"Draft": {"colour": "#6b7280"}},
+        })
+        assert ok.status_code == 200
+
+    def test_bundle_with_invalid_ui_schema_rejected(self):
+        client, user = _auth_client()
+        wf, *_ = _simple_workflow(user)
+        import json as json_mod
+
+        bundle = json_mod.loads(client.get(f"/api/workflows/{wf.id}/export/").content)
+        bundle["workflow"]["ui_schema"] = {"shell": "hologram"}
+        resp = client.post(
+            "/api/workflows/import/", {"bundle": bundle, "name": "Broken import"}, format="json"
+        )
+        assert resp.status_code == 400
+        assert "ui_schema" in resp.data["detail"]

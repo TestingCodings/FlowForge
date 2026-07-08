@@ -5,6 +5,8 @@ import { apiClient } from "../api/client";
 import { Workflow, FormDefinitionApi, FormField } from "../types/api";
 import StateGraph from "../components/StateGraph";
 import WebhooksPanel from "../components/WebhooksPanel";
+import PresentationPanel from "../components/PresentationPanel";
+import { formatDate } from "../hooks/useWorkspace";
 
 const FIELD_TYPES = ["text", "textarea", "number", "checkbox", "dropdown", "date"] as const;
 
@@ -147,14 +149,6 @@ export default function WorkflowDetailPage() {
     enabled: Boolean(id),
   });
 
-  const uiSchemaMutation = useMutation({
-    mutationFn: async (shell: "list" | "kanban") =>
-      (await apiClient.patch(`/workflows/${id}/ui-schema/`, {
-        ui_schema: { ...(wf?.ui_schema ?? {}), shell },
-      })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workflow", id] }),
-  });
-
   const exportBundle = async () => {
     const resp = await apiClient.get(`/workflows/${id}/export/`, { responseType: "blob" });
     const url = URL.createObjectURL(resp.data);
@@ -256,18 +250,9 @@ export default function WorkflowDetailPage() {
           <span className="badge badge-inactive">
             v{wf.version}{wf.published_at ? "" : " · draft"}
           </span>
-          <select
-            value={wf.ui_schema?.shell ?? "list"}
-            onChange={e => uiSchemaMutation.mutate(e.target.value as "list" | "kanban")}
-            title="Presentation shell for this workflow (Layer 2)"
-            style={{ fontSize: "0.8rem", padding: "4px 8px" }}
-          >
-            <option value="list">List shell</option>
-            <option value="kanban">Kanban shell</option>
-          </select>
-          {(wf.ui_schema?.shell === "kanban") && (
-            <Link to={`/workflows/${id}/board`} className="btn-primary btn-sm" style={{ textDecoration: "none" }}>
-              Open board
+          {(wf.ui_schema?.shell ?? "list") !== "list" && (
+            <Link to={`/workflows/${id}/view`} className="btn-primary btn-sm" style={{ textDecoration: "none" }}>
+              Open {wf.ui_schema?.shell} view
             </Link>
           )}
           <button
@@ -796,6 +781,8 @@ export default function WorkflowDetailPage() {
       </div>
 
       {/* ── Webhooks ── */}
+      <PresentationPanel workflow={wf} />
+
       {id && <WebhooksPanel workflowId={id} canEdit={true} />}
 
       {/* ── Version history ── */}
@@ -833,7 +820,7 @@ export default function WorkflowDetailPage() {
                   </td>
                   <td className="text-muted text-sm">
                     {v.published_at
-                      ? new Date(v.published_at).toLocaleDateString()
+                      ? formatDate(v.published_at)
                       : "—"}
                   </td>
                   <td>

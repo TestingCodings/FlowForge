@@ -105,13 +105,20 @@ def import_workflow(bundle: dict, created_by=None, rename: str | None = None) ->
     if len(initial_states) != 1:
         raise BundleError("Bundle must contain exactly one initial state.")
 
+    ui_schema = wf_data.get("ui_schema") or {}
+    from .ui_schema import validate_ui_schema
+
+    ui_error = validate_ui_schema(ui_schema)
+    if ui_error:
+        raise BundleError(f"Invalid ui_schema in bundle: {ui_error}")
+
     workflow = WorkflowDefinition.objects.create(
         name=name,
         description=wf_data.get("description", ""),
         reference_prefix=wf_data.get("reference_prefix", "WFF"),
         version=1,
         is_active=wf_data.get("is_active", False),
-        ui_schema=wf_data.get("ui_schema") or {},
+        ui_schema=ui_schema,
         created_by=created_by,
     )
 

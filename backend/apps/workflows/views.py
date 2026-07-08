@@ -130,14 +130,14 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="ui-schema")
     def update_ui_schema(self, request, pk=None):
         """Set the presentation schema (Layer 2). workflow_designer+."""
+        from .ui_schema import validate_ui_schema
+
         require_min_role(request.user, "workflow_designer", action="edit workflow UI schema")
         wf = self.get_object()
         ui_schema = request.data.get("ui_schema")
-        if not isinstance(ui_schema, dict):
-            return Response({"detail": "ui_schema must be an object."}, status=400)
-        shell = ui_schema.get("shell", "list")
-        if shell not in ("list", "kanban"):
-            return Response({"detail": f"Unknown shell '{shell}'. Valid: list, kanban."}, status=400)
+        error = validate_ui_schema(ui_schema)
+        if error:
+            return Response({"detail": error}, status=400)
         wf.ui_schema = ui_schema
         wf.save(update_fields=["ui_schema", "updated_at"])
         return Response(WorkflowDefinitionSerializer(wf).data)

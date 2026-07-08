@@ -15,7 +15,7 @@ import HelpPage from "./pages/HelpPage";
 import WorkflowDetailPage from "./pages/WorkflowDetailPage";
 import WorkflowsPage from "./pages/WorkflowsPage";
 import WorkspacePage from "./pages/WorkspacePage";
-import KanbanPage from "./pages/KanbanPage";
+import WorkflowViewPage from "./pages/WorkflowViewPage";
 
 export default function App() {
   return (
@@ -37,7 +37,8 @@ export default function App() {
         <Route path="workflows/new" element={<WorkflowBuilderPage />} />
         <Route path="workflows/templates" element={<NewWorkflowPage />} />
         <Route path="workflows/:id" element={<WorkflowDetailPage />} />
-        <Route path="workflows/:id/board" element={<KanbanPage />} />
+        <Route path="workflows/:id/view" element={<WorkflowViewPage />} />
+        <Route path="workflows/:id/board" element={<WorkflowViewPage />} />
         <Route path="instances" element={<InstancesPage />} />
         <Route path="instances/:id" element={<InstanceDetailPage />} />
         <Route path="tasks" element={<DashboardPage />} />
