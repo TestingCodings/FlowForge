@@ -83,8 +83,8 @@ graph TD
 | Metadata Editor | Add/edit key-value fields on any live instance; values auto-coerced to number/boolean/string |
 | Dashboard Charts | Activity area chart (14 days), instances-by-state bar, active/completed stacked bar by workflow |
 | Bulk Operations | Select up to 100 instances: fire one transition across all with per-instance results, or export the selection (with flattened metadata columns) as CSV |
-| Workspace Theming | White-label the platform per deployment: name, tagline, logo, and a nine-token colour theme edited live with instant preview (Layer 1) |
-| Kanban Shell | Flip any workflow to a board view: columns are states, drag a card to fire the transition — rules, approvals, and required forms still gate every move (Layer 2) |
+| Workspace Theming | White-label the platform: name, tagline, logo, four theme presets (incl. light mode), 15 colour tokens, font, and date format - edited live with instant preview (Layer 1) |
+| UI Shells | Present any workflow as a list, kanban board (drag-to-transition), sortable table, or calendar - configured visually per workflow with per-state colours; every shell defers to the engine so rules, approvals, and forms gate every move (Layer 2) |
 | Export / Import | Download any workflow as a portable `.flowforge.json` bundle (states, transitions, rules, forms, UI schema, name-based references) and import it on any FlowForge install (Layer 3 foundation) |
 | Demo User Switcher | Flip between admin/approver/participant in one browser tab to demonstrate role differences live |
 | Seed Command | `python manage.py seed --reset` - idempotent demo data with full audit trails; `--testrail` adds a three-workflow test management suite |
@@ -235,10 +235,10 @@ The project is built in deliberate phases, each shipping a complete vertical sli
 | 5 | Form schemas per state: structured data collection gating transitions, visual form editor | Done |
 | 6 | Webhooks (HMAC-signed), event notifications, scheduled SLA breach enforcement | Done |
 | 7 | Bulk operations: multi-select transition with per-instance results, CSV export | Done |
-| 8 | Layer 1: workspace theming and white-labelling with live theme editor | Done |
-| 9 | Layer 2: kanban shell with drag-to-transition; per-workflow `ui_schema` | Done |
+| 8 | Layer 1 complete: white-labelling with presets, light mode, fonts, date formats | Done |
+| 9 | Layer 2 complete: shell architecture (kanban, table, calendar), visual UI schema builder, per-state colours | Done |
 | 10 | Layer 3 foundation: portable workflow bundles (export/import as JSON) | Done |
-| 11 | Docker Compose + PostgreSQL production setup; more shells (table, calendar); full app export | Planned |
+| 11 | Layer 3: Docker Compose + PostgreSQL production setup, embedded widget, full app export | Planned |
 
 See [docs/VISION.md](docs/VISION.md) for the full platform architecture vision including the three-layer extensibility model.
 
