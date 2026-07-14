@@ -548,3 +548,122 @@ class TestUiSchemaValidation:
         )
         assert resp.status_code == 400
         assert "ui_schema" in resp.data["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Instance containers (hierarchy)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestInstanceContainers:
+    def _plan_and_run_workflows(self, client, user):
+        """Parent 'Plan' workflow allowing 'Run' children."""
+        plan_wf, *_ = _simple_workflow(user)
+        run_wf = WorkflowDefinitionFactory(created_by=user, name=f"Run {plan_wf.id.hex[:6]}")
+        StateFactory(workflow_definition=run_wf, name="Open", is_initial=True, position_order=1)
+        s_done = StateFactory(workflow_definition=run_wf, name="Done", is_terminal=True, position_order=2)
+        t_finish = TransitionFactory(
+            workflow_definition=run_wf,
+            from_state=run_wf.states.get(name="Open"),
+            to_state=s_done,
+            name="Finish",
+        )
+        resp = client.patch(
+            f"/api/workflows/{plan_wf.id}/ui-schema/",
+            {"ui_schema": {"shell": "list", "children": {"workflows": [run_wf.name], "shell": "table", "roll_up": True}}},
+            format="json",
+        )
+        assert resp.status_code == 200
+        return plan_wf, run_wf, t_finish
+
+    def _create(self, client, wf_id, parent=None):
+        payload = {"workflow_definition": str(wf_id)}
+        if parent:
+            payload["parent"] = str(parent)
+        return client.post("/api/instances/", payload, format="json")
+
+    def test_child_creation_respects_allow_list(self):
+        client, user = _auth_client()
+        plan_wf, run_wf, _ = self._plan_and_run_workflows(client, user)
+        plan = self._create(client, plan_wf.id).data
+
+        ok = self._create(client, run_wf.id, parent=plan["id"])
+        assert ok.status_code == 201
+        assert str(ok.data["parent"]) == str(plan["id"])
+        assert ok.data["parent_reference"] == plan["reference_number"]
+
+        # A Plan inside a Plan is not allowed
+        denied = self._create(client, plan_wf.id, parent=plan["id"])
+        assert denied.status_code == 400
+        assert "does not allow" in str(denied.data)
+
+    def test_children_endpoint_and_rollup_stats(self):
+        client, user = _auth_client()
+        plan_wf, run_wf, t_finish = self._plan_and_run_workflows(client, user)
+        plan = self._create(client, plan_wf.id).data
+        child_ids = [self._create(client, run_wf.id, parent=plan["id"]).data["id"] for _ in range(3)]
+
+        children = client.get(f"/api/instances/{plan['id']}/children/")
+        assert children.status_code == 200
+        assert len(children.data) == 3
+
+        # Complete one child; parent detail rolls up 1/3
+        client.post(f"/api/instances/{child_ids[0]}/transition/", {"transition_id": str(t_finish.id)}, format="json")
+        detail = client.get(f"/api/instances/{plan['id']}/")
+        assert detail.data["children_stats"] == {"total": 3, "completed": 1, "open": 2}
+
+    def test_rollup_rule_blocks_parent_until_children_complete(self):
+        from apps.workflows.models import Rule
+
+        client, user = _auth_client()
+        plan_wf, run_wf, t_finish = self._plan_and_run_workflows(client, user)
+        t_submit = plan_wf.transitions.get(name="Submit")
+        Rule.objects.create(
+            workflow_definition=plan_wf,
+            transition=t_submit,
+            condition={"field": "children_complete", "operator": "is_false"},
+            action={"type": "block_transition", "reason": "All children must be complete first."},
+            priority=1,
+        )
+        plan = self._create(client, plan_wf.id).data
+        child = self._create(client, run_wf.id, parent=plan["id"]).data
+
+        blocked = client.post(
+            f"/api/instances/{plan['id']}/transition/", {"transition_id": str(t_submit.id)}, format="json"
+        )
+        assert blocked.status_code == 400
+        assert "children must be complete" in str(blocked.data)
+
+        client.post(f"/api/instances/{child['id']}/transition/", {"transition_id": str(t_finish.id)}, format="json")
+        allowed = client.post(
+            f"/api/instances/{plan['id']}/transition/", {"transition_id": str(t_submit.id)}, format="json"
+        )
+        assert allowed.status_code == 200
+
+    def test_move_rejects_cycles_and_disallowed_parents(self):
+        client, user = _auth_client()
+        plan_wf, run_wf, _ = self._plan_and_run_workflows(client, user)
+        plan = self._create(client, plan_wf.id).data
+        child = self._create(client, run_wf.id, parent=plan["id"]).data
+
+        # Parent cannot become a child of its own child (also fails allow-list here)
+        cyc = client.patch(f"/api/instances/{plan['id']}/move/", {"parent": child["id"]}, format="json")
+        assert cyc.status_code == 400
+
+        # Detach works
+        detached = client.patch(f"/api/instances/{child['id']}/move/", {"parent": None}, format="json")
+        assert detached.status_code == 200
+        assert detached.data["parent"] is None
+
+    def test_top_level_filter(self):
+        client, user = _auth_client()
+        plan_wf, run_wf, _ = self._plan_and_run_workflows(client, user)
+        plan = self._create(client, plan_wf.id).data
+        self._create(client, run_wf.id, parent=plan["id"])
+
+        top = client.get("/api/instances/?parent__isnull=true")
+        assert top.status_code == 200
+        refs = [r["reference_number"] for r in top.data["results"]]
+        assert plan["reference_number"] in refs
+        assert all(r["parent"] is None for r in top.data["results"])

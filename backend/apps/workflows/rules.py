@@ -76,6 +76,25 @@ def evaluate_rules_via_service(rules, data):
         return evaluate_rules_local(rules, data)
 
 
+def _hierarchy_facts(instance):
+    """Computed children facts injected into rule data.
+
+    Lets rules express roll-up gating with existing operators — e.g.
+    {"field": "children_complete", "operator": "is_false"} blocks a parent
+    transition while children are open — and works identically in the local
+    evaluator and the rules microservice, since it's just data.
+    """
+    total = instance.children.count()
+    if total == 0:
+        return {"children_total": 0, "children_open": 0, "children_complete": True}
+    open_count = instance.children.filter(completed_at__isnull=True).count()
+    return {
+        "children_total": total,
+        "children_open": open_count,
+        "children_complete": open_count == 0,
+    }
+
+
 def evaluate_for_transition(instance, transition):
     scoped_rules = Rule.objects.filter(workflow_definition=instance.workflow_definition).filter(
         transition__isnull=True
@@ -85,4 +104,5 @@ def evaluate_for_transition(instance, transition):
         transition=transition,
     )
     rules = list(scoped_rules) + list(transition_rules)
-    return evaluate_rules_via_service(rules, instance.metadata_json or {})
+    data = {**(instance.metadata_json or {}), **_hierarchy_facts(instance)}
+    return evaluate_rules_via_service(rules, data)

@@ -45,9 +45,12 @@ export default function InstancesPage() {
   const [bulkTransitionId, setBulkTransitionId] = useState("");
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
 
+  const [topLevelOnly, setTopLevelOnly] = useState(false);
+
   const { data: instances = [], isLoading } = useQuery<WorkflowInstance[]>({
-    queryKey: ["instances"],
-    queryFn: async () => (await apiClient.get("/instances/")).data.results ?? [],
+    queryKey: ["instances", { topLevelOnly }],
+    queryFn: async () =>
+      (await apiClient.get(topLevelOnly ? "/instances/?parent__isnull=true" : "/instances/")).data.results ?? [],
   });
 
   const { data: workflows = [] } = useQuery<Workflow[]>({
@@ -209,6 +212,15 @@ export default function InstancesPage() {
             style={{ maxWidth: 300 }}
           />
 
+          <label className="text-sm" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={topLevelOnly}
+              onChange={() => setTopLevelOnly(!topLevelOnly)}
+            />
+            Top-level only
+          </label>
+
           {selected.size > 0 && (
             <div style={{
               display: "flex", gap: 8, alignItems: "center", marginLeft: "auto",
@@ -292,6 +304,11 @@ export default function InstancesPage() {
                       <Link to={`/instances/${inst.id}`} style={{ fontFamily: "monospace", fontSize: "0.875rem" }}>
                         {inst.reference_number}
                       </Link>
+                      {inst.parent_reference && (
+                        <div className="text-xs text-muted" style={{ fontFamily: "monospace" }}>
+                          ↳ in {inst.parent_reference}
+                        </div>
+                      )}
                     </td>
                     <td className="text-sm">{inst.workflow_definition_name}</td>
                     <td>

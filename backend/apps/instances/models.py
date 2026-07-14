@@ -55,9 +55,12 @@ def generate_reference_number(workflow_definition):
     prefix = (workflow_definition.reference_prefix or "WFF").upper()[:10]
 
     with transaction.atomic():
+        # Sequence per prefix (not per definition): only the prefix appears in
+        # the reference string, so definitions sharing a prefix must share the
+        # sequence or they collide on the unique constraint.
         count = (
             WorkflowInstance.objects.select_for_update()
-            .filter(workflow_definition=workflow_definition, created_at__year=year)
+            .filter(workflow_definition__reference_prefix=prefix, created_at__year=year)
             .count()
         )
         return f"{prefix}-{year}-{count + 1:05d}"
@@ -69,6 +72,16 @@ class WorkflowInstance(models.Model):
         WorkflowDefinition, on_delete=models.PROTECT, related_name="instances"
     )
     current_state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="instances")
+    # Containment (docs/UX.md section 3): first-class hierarchy with invariants
+    # typed relationships can't provide (single parent, no cycles, PROTECT).
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="children",
+    )
+    child_order = models.PositiveIntegerField(default=0)
     reference_number = models.CharField(max_length=30, unique=True, editable=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -92,6 +105,17 @@ class WorkflowInstance(models.Model):
     def clean(self):
         if self.current_state_id and self.current_state.workflow_definition_id != self.workflow_definition_id:
             raise ValidationError("current_state must belong to workflow_definition")
+        if self.parent_id:
+            if self.parent_id == self.id:
+                raise ValidationError("An instance cannot be its own parent")
+            # Walk up to reject cycles (trees are shallow; bounded walk)
+            seen = {self.id}
+            ancestor = self.parent
+            while ancestor is not None:
+                if ancestor.id in seen:
+                    raise ValidationError("Moving this instance would create a cycle")
+                seen.add(ancestor.id)
+                ancestor = ancestor.parent
 
     def save(self, *args, **kwargs):
         if not self.current_state_id and self.workflow_definition_id:

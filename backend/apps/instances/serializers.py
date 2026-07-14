@@ -47,11 +47,38 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     sla = serializers.SerializerMethodField()
     relationships = serializers.SerializerMethodField()
     current_form = serializers.SerializerMethodField()
+    parent_reference = serializers.CharField(source="parent.reference_number", read_only=True, default=None)
+    children_stats = serializers.SerializerMethodField()
 
     def get_sla(self, obj):
         if obj.completed_at:
             return None
         return _sla_status(obj)
+
+    def get_children_stats(self, obj):
+        """Roll-up counts. Detail requests only (avoids N+1 on lists)."""
+        if not self._is_detail_request():
+            return None
+        total = obj.children.count()
+        if total == 0:
+            return None
+        completed = obj.children.filter(completed_at__isnull=False).count()
+        return {"total": total, "completed": completed, "open": total - completed}
+
+    def validate(self, attrs):
+        """On create with a parent: enforce the parent's children allow-list."""
+        parent = attrs.get("parent")
+        wf = attrs.get("workflow_definition")
+        if parent is not None and wf is not None:
+            allowed = (parent.workflow_definition.ui_schema or {}).get("children", {}).get("workflows", [])
+            if wf.name not in allowed:
+                raise serializers.ValidationError(
+                    f"'{parent.workflow_definition.name}' does not allow "
+                    f"'{wf.name}' children. Allowed: {', '.join(allowed) or 'none'}."
+                )
+            if parent.completed_at:
+                raise serializers.ValidationError("Cannot add children to a completed instance.")
+        return attrs
 
     def _is_detail_request(self):
         request = self.context.get("request")
@@ -122,6 +149,10 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "sla",
             "relationships",
             "current_form",
+            "parent",
+            "parent_reference",
+            "child_order",
+            "children_stats",
         )
         read_only_fields = (
             "id",
@@ -155,6 +186,19 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
                 "recipient_email": request.user.email if request else "",
             },
         )
+        if instance.parent_id:
+            from apps.audit.models import AuditActionType, AuditLog
+
+            AuditLog.objects.create(
+                workflow_instance=instance.parent,
+                actor=request.user if request else None,
+                action_type=AuditActionType.CHILD_ADDED,
+                from_state=instance.parent.current_state.name,
+                payload={
+                    "child_reference": instance.reference_number,
+                    "child_workflow": instance.workflow_definition.name,
+                },
+            )
         return instance
 
 

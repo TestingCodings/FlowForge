@@ -13,6 +13,9 @@ Recognised keys:
     date_field    str    calendar shell date source: "created_at" or a metadata key
     title_field   str    metadata key used as the card/row title
     state_display {state_name: {"colour": "#hex"}}  per-state display config
+    children      {workflows: [names], shell, columns, roll_up: bool}
+                  which workflow definitions may nest inside instances of this
+                  one, and how the children render on the parent detail page
 """
 
 VALID_SHELLS = ("list", "kanban", "table", "calendar")
@@ -40,6 +43,20 @@ def validate_ui_schema(ui_schema) -> str | None:
     for key in ("date_field", "title_field"):
         if key in ui_schema and (not isinstance(ui_schema[key], str) or not ui_schema[key].strip()):
             return f"ui_schema.{key} must be a non-empty string."
+
+    children = ui_schema.get("children")
+    if children is not None:
+        if not isinstance(children, dict):
+            return "ui_schema.children must be an object."
+        if "workflows" in children and not _is_str_list(children["workflows"]):
+            return "ui_schema.children.workflows must be a list of workflow names."
+        child_shell = children.get("shell", "table")
+        if child_shell not in VALID_SHELLS:
+            return f"Unknown children shell '{child_shell}'. Valid: {', '.join(VALID_SHELLS)}."
+        if "columns" in children and not _is_str_list(children["columns"]):
+            return "ui_schema.children.columns must be a list of non-empty strings."
+        if "roll_up" in children and not isinstance(children["roll_up"], bool):
+            return "ui_schema.children.roll_up must be a boolean."
 
     state_display = ui_schema.get("state_display")
     if state_display is not None:

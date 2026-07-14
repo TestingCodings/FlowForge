@@ -19,6 +19,8 @@ class AuditActionType(models.TextChoices):
     RELATIONSHIP_ADDED = "relationship_added", "Relationship Added"
     RELATIONSHIP_REMOVED = "relationship_removed", "Relationship Removed"
     SLA_BREACHED = "sla_breached", "SLA Breached"
+    CHILD_ADDED = "child_added", "Child Instance Added"
+    CHILD_MOVED = "child_moved", "Child Instance Moved"
 
 
 class AuditLog(models.Model):

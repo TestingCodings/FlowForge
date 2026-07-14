@@ -83,6 +83,7 @@ graph TD
 | Metadata Editor | Add/edit key-value fields on any live instance; values auto-coerced to number/boolean/string |
 | Dashboard Charts | Activity area chart (14 days), instances-by-state bar, active/completed stacked bar by workflow |
 | Bulk Operations | Select up to 100 instances: fire one transition across all with per-instance results, or export the selection (with flattened metadata columns) as CSV |
+| Instance Containers | Nest instances inside instances (Release contains Test Runs contains Bug Reports): per-workflow allow-lists, roll-up progress on the parent, breadcrumb navigation, and rules that gate parent transitions until children complete |
 | Workspace Theming | White-label the platform: name, tagline, logo, four theme presets (incl. light mode), 15 colour tokens, font, and date format - edited live with instant preview (Layer 1) |
 | UI Shells | Present any workflow as a list, kanban board (drag-to-transition), sortable table, or calendar - configured visually per workflow with per-state colours; every shell defers to the engine so rules, approvals, and forms gate every move (Layer 2) |
 | Export / Import | Download any workflow as a portable `.flowforge.json` bundle (states, transitions, rules, forms, UI schema, name-based references) and import it on any FlowForge install (Layer 3 foundation) |
@@ -238,9 +239,10 @@ The project is built in deliberate phases, each shipping a complete vertical sli
 | 8 | Layer 1 complete: white-labelling with presets, light mode, fonts, date formats | Done |
 | 9 | Layer 2 complete: shell architecture (kanban, table, calendar), visual UI schema builder, per-state colours | Done |
 | 10 | Layer 3 foundation: portable workflow bundles (export/import as JSON) | Done |
-| 11 | Layer 3: Docker Compose + PostgreSQL production setup, embedded widget, full app export | Planned |
+| 11 | Instance containers: sub-instances with allow-lists, roll-up progress, hierarchy-aware rules | Done |
+| 12 | Layer 3: Docker Compose + PostgreSQL production setup, embedded widget, full app export | Planned |
 
-See [docs/VISION.md](docs/VISION.md) for the full platform architecture vision including the three-layer extensibility model.
+See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs/UX.md](docs/UX.md) for the usability roadmap, and [docs/API.md](docs/API.md) for the complete API reference.
 
 ---
 

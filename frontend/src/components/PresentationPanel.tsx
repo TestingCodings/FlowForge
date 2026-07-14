@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
 import { ShellName, Workflow, WorkflowUiSchema } from "../types/api";
@@ -19,8 +19,16 @@ export default function PresentationPanel({ workflow }: Props) {
   const [listColumns, setListColumns] = useState("");
   const [dateField, setDateField] = useState("");
   const [stateColours, setStateColours] = useState<Record<string, string>>({});
+  const [childWorkflows, setChildWorkflows] = useState<string[]>([]);
+  const [childColumns, setChildColumns] = useState("");
+  const [rollUp, setRollUp] = useState(true);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const { data: allWorkflows = [] } = useQuery<Workflow[]>({
+    queryKey: ["workflows"],
+    queryFn: async () => (await apiClient.get("/workflows/")).data.results ?? [],
+  });
 
   useEffect(() => {
     const ui = workflow.ui_schema ?? {};
@@ -29,6 +37,9 @@ export default function PresentationPanel({ workflow }: Props) {
     setCardFields((ui.card_fields ?? []).join(", "));
     setListColumns((ui.list_columns ?? []).join(", "));
     setDateField(ui.date_field ?? "");
+    setChildWorkflows(ui.children?.workflows ?? []);
+    setChildColumns((ui.children?.columns ?? []).join(", "));
+    setRollUp(ui.children?.roll_up ?? true);
     const colours: Record<string, string> = {};
     for (const [name, cfg] of Object.entries(ui.state_display ?? {})) {
       if (cfg?.colour) colours[name] = cfg.colour;
@@ -49,6 +60,10 @@ export default function PresentationPanel({ workflow }: Props) {
         if (colour) display[name] = { colour };
       }
       if (Object.keys(display).length) ui.state_display = display;
+      if (childWorkflows.length) {
+        ui.children = { workflows: childWorkflows, shell: "table", roll_up: rollUp };
+        if (childColumns.trim()) ui.children.columns = parseList(childColumns);
+      }
       return (await apiClient.patch(`/workflows/${workflow.id}/ui-schema/`, { ui_schema: ui })).data;
     },
     onSuccess: () => {
@@ -169,6 +184,55 @@ export default function PresentationPanel({ workflow }: Props) {
           </div>
           <p className="text-xs text-muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
             Colours apply to kanban column headers, table state badges, and calendar chips.
+          </p>
+        </div>
+      </div>
+
+      <div className="divider" />
+
+      {/* ── Sub-instances (containers) ── */}
+      <div className="text-xs text-muted mb-2" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        Sub-instances
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div>
+          <div className="text-sm mb-2">Which workflows can nest inside a {workflow.name}?</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {allWorkflows.filter(w => w.id !== workflow.id).map(w => (
+              <label key={w.id} className="text-sm" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={childWorkflows.includes(w.name)}
+                  onChange={() =>
+                    setChildWorkflows(cur =>
+                      cur.includes(w.name) ? cur.filter(n => n !== w.name) : [...cur, w.name],
+                    )
+                  }
+                />
+                {w.name}
+                <span className="text-xs text-muted" style={{ fontFamily: "monospace" }}>{w.reference_prefix}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="form-group">
+            <label>Child table columns <span className="text-muted">(optional)</span></label>
+            <input
+              value={childColumns}
+              onChange={e => setChildColumns(e.target.value)}
+              placeholder="reference, state, metadata.priority"
+              style={{ fontFamily: "monospace", fontSize: "0.82rem" }}
+              disabled={childWorkflows.length === 0}
+            />
+          </div>
+          <label className="text-sm" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={rollUp} onChange={() => setRollUp(!rollUp)} disabled={childWorkflows.length === 0} />
+            Show completion roll-up on the parent
+          </label>
+          <p className="text-xs text-muted" style={{ marginTop: 8, lineHeight: 1.5 }}>
+            Rules can gate parent transitions on children: use the injected fields{" "}
+            <code>children_complete</code>, <code>children_open</code>, <code>children_total</code>.
           </p>
         </div>
       </div>

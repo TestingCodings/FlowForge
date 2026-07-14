@@ -8,6 +8,7 @@ import {
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
+import ChildrenPanel from "../components/ChildrenPanel";
 import { formatDateTime } from "../hooks/useWorkspace";
 
 /* ─── Role capability helpers ─── */
@@ -231,10 +232,18 @@ export default function InstanceDetailPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
+      {/* Breadcrumb — includes the parent chain for contained instances */}
       <div className="breadcrumb">
         <Link to="/instances">Instances</Link>
         <span>/</span>
+        {instance.parent && instance.parent_reference && (
+          <>
+            <Link to={`/instances/${instance.parent}`} style={{ fontFamily: "monospace" }}>
+              {instance.parent_reference}
+            </Link>
+            <span>/</span>
+          </>
+        )}
         <span style={{ color: "var(--text-primary)" }}>{instance.reference_number}</span>
       </div>
 
@@ -514,6 +523,13 @@ export default function InstanceDetailPage() {
           }
         />
       )}
+
+      {/* ── Sub-instances ── */}
+      <ChildrenPanel
+        instance={instance}
+        workflow={workflow}
+        canEdit={userCan(myRoles, "transition")}
+      />
 
       {/* ── Relationships ── */}
       <RelationshipsPanel

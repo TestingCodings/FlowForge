@@ -23,7 +23,7 @@ from .serializers import TransitionRequestSerializer, WorkflowInstanceSerializer
 
 class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     queryset = WorkflowInstance.objects.select_related(
-        "workflow_definition", "current_state", "created_by"
+        "workflow_definition", "current_state", "created_by", "parent"
     ).prefetch_related("audit_logs").all()
     serializer_class = WorkflowInstanceSerializer
     # Viewer+ for reads; writes are gated per-action below
@@ -31,7 +31,11 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     # patch/delete are needed for the custom metadata and unlink actions;
     # the default update/partial_update/destroy routes are blocked below.
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-    filterset_fields = ["workflow_definition", "current_state"]
+    filterset_fields = {
+        "workflow_definition": ["exact"],
+        "current_state": ["exact"],
+        "parent": ["exact", "isnull"],
+    }
 
     def create(self, request, *args, **kwargs):
         require_min_role(request.user, "participant", action="create a workflow instance")
@@ -307,6 +311,62 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
         return Response(WorkflowInstanceSerializer(instance).data)
+
+    @action(detail=True, methods=["get"], url_path="children")
+    def children(self, request, pk=None):
+        """Ordered children of this instance."""
+        instance = self.get_object()
+        qs = (
+            instance.children.select_related("workflow_definition", "current_state", "parent")
+            .order_by("child_order", "created_at")
+        )
+        return Response(WorkflowInstanceSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=["patch"], url_path="move")
+    def move(self, request, pk=None):
+        """Re-parent an instance (or detach with parent=null). Participant+."""
+        require_min_role(request.user, "participant", action="move an instance")
+        instance = self.get_object()
+        parent_id = request.data.get("parent", None)
+
+        new_parent = None
+        if parent_id:
+            try:
+                new_parent = WorkflowInstance.objects.select_related(
+                    "workflow_definition", "current_state"
+                ).get(id=parent_id)
+            except (WorkflowInstance.DoesNotExist, ValueError):
+                return Response({"detail": "Parent instance not found."}, status=404)
+            allowed = (new_parent.workflow_definition.ui_schema or {}).get("children", {}).get("workflows", [])
+            if instance.workflow_definition.name not in allowed:
+                return Response(
+                    {"detail": f"'{new_parent.workflow_definition.name}' does not allow "
+                               f"'{instance.workflow_definition.name}' children."},
+                    status=400,
+                )
+            if new_parent.completed_at:
+                return Response({"detail": "Cannot add children to a completed instance."}, status=400)
+
+        old_parent = instance.parent
+        instance.parent = new_parent
+        try:
+            instance.save(update_fields=["parent", "updated_at"])
+        except Exception as exc:  # cycle or self-parent from model clean()
+            return Response({"detail": str(exc)}, status=400)
+
+        for affected, direction in ((old_parent, "removed"), (new_parent, "added")):
+            if affected is not None:
+                AuditLog.objects.create(
+                    workflow_instance=affected,
+                    actor=request.user,
+                    action_type=AuditActionType.CHILD_MOVED,
+                    from_state=affected.current_state.name,
+                    payload={
+                        "child_reference": instance.reference_number,
+                        "direction": direction,
+                    },
+                )
+        return Response(WorkflowInstanceSerializer(instance, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="search")
     def search(self, request):

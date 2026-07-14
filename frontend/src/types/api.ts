@@ -55,6 +55,13 @@ export interface Rule {
 
 export type ShellName = "list" | "kanban" | "table" | "calendar";
 
+export interface ChildrenConfig {
+  workflows?: string[];
+  shell?: ShellName;
+  columns?: string[];
+  roll_up?: boolean;
+}
+
 export interface WorkflowUiSchema {
   shell?: ShellName;
   card_fields?: string[];
@@ -62,6 +69,13 @@ export interface WorkflowUiSchema {
   date_field?: string;
   title_field?: string;
   state_display?: Record<string, { colour?: string }>;
+  children?: ChildrenConfig;
+}
+
+export interface ChildrenStats {
+  total: number;
+  completed: number;
+  open: number;
 }
 
 export interface Workspace {
@@ -188,6 +202,10 @@ export interface WorkflowInstance {
   sla: SlaInfo | null;
   relationships: InstanceRelationship[];
   current_form: CurrentForm | null;
+  parent: string | null;
+  parent_reference: string | null;
+  child_order: number;
+  children_stats: ChildrenStats | null;
 }
 
 export interface AuditEntry {
