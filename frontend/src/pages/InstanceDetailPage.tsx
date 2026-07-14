@@ -8,6 +8,7 @@ import {
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
+import Hint from "../components/Hint";
 import ChildrenPanel from "../components/ChildrenPanel";
 import { formatDateTime } from "../hooks/useWorkspace";
 
@@ -294,7 +295,7 @@ export default function InstanceDetailPage() {
         {/* ── Transitions + Comment panel ── */}
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           <div className="card-header">
-            <h3>Actions</h3>
+            <h3>Actions <Hint tip="These buttons move the item to its next stage. A button can be blocked by a rule, a required form, or need a higher role — the error message will say why." below /></h3>
             {!isCompleted && (
               <span className="badge badge-inactive" style={{ fontSize: "0.7rem" }}>
                 {instance.current_state_name}
@@ -412,7 +413,7 @@ export default function InstanceDetailPage() {
         {/* ── Metadata ── */}
         <div className="card">
           <div className="card-header">
-            <h3>Metadata</h3>
+            <h3>Metadata <Hint tip="Extra details stored on this item as name/value pairs. Rules read these values, so editing them can unlock or block the action buttons." below /></h3>
             {!editingMeta && (
               <button className="btn-secondary btn-sm" onClick={startEdit}>Edit</button>
             )}
@@ -559,7 +560,7 @@ export default function InstanceDetailPage() {
       {/* ── Audit trail / comments ── */}
       <div className="card mt-4">
         <div className="card-header">
-          <h3>Timeline</h3>
+          <h3>Timeline <Hint tip="A permanent history of everything that happened to this item — every stage change, comment, and edit, with who did it and when. It cannot be altered." /></h3>
           <span className="badge badge-inactive">{(auditData?.results ?? []).length} events</span>
         </div>
         {(auditData?.results ?? []).length === 0 ? (
@@ -904,7 +905,7 @@ function RelationshipsPanel({
   return (
     <div className="card mt-4">
       <div className="card-header">
-        <h3>Relationships</h3>
+        <h3>Relationships <Hint tip="Links between this item and related items in other workflows — for example a bug found during a test run. Links are informational connections; they do not move anything." /></h3>
         <div className="flex gap-2 items-center">
           <span className="badge badge-inactive">{rels.length}</span>
           {canLink && !instance.completed_at && (

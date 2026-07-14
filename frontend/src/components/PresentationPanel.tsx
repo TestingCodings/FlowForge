@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
 import { ShellName, Workflow, WorkflowUiSchema } from "../types/api";
+import Hint from "./Hint";
 import { SHELL_OPTIONS } from "./shells";
 
 interface Props {
@@ -80,7 +81,7 @@ export default function PresentationPanel({ workflow }: Props) {
   return (
     <div className="card mt-4">
       <div className="card-header">
-        <h3>Presentation</h3>
+        <h3>Presentation <Hint tip="Controls how this workflow looks for everyone: a simple list, a drag-and-drop board, a table, or a calendar — plus colours and which details appear on cards." /></h3>
         <div className="flex gap-2 items-center">
           {shell !== "list" && (
             <Link to={`/workflows/${workflow.id}/view`} className="btn-secondary btn-sm" style={{ textDecoration: "none" }}>

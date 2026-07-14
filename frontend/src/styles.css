@@ -30,6 +30,11 @@
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
 
   --font: "Inter", "Segoe UI", system-ui, sans-serif;
+
+  /* Aliases — some components reference these names; keep them pointing
+     at the real tokens so themes update them too. */
+  --bg-secondary: var(--bg-surface);
+  --text-muted: var(--text-secondary);
 }
 
 /* ─── Reset ─── */
@@ -434,6 +439,18 @@ input:focus, select:focus, textarea:focus {
 
 input::placeholder { color: var(--text-disabled); }
 
+/* Checkboxes/radios must not inherit the full-width input rule —
+   otherwise they stretch and shove their label text to the far side. */
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+input[type="checkbox"]:focus, input[type="radio"]:focus { box-shadow: none; }
+
 label {
   display: block;
   font-size: 0.8rem;
@@ -627,3 +644,51 @@ pre {
   background: rgba(99,102,241,0.12);
   color: var(--accent-light);
 }
+
+/* ─── Hint tooltips (hover explanations for non-technical users) ─── */
+.hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  vertical-align: middle;
+  cursor: help;
+  user-select: none;
+}
+.hint::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s;
+  z-index: 200;
+  pointer-events: none;
+}
+.hint:hover::after { opacity: 1; visibility: visible; }
+/* Tooltips open downward by default (card headers sit at card tops). */

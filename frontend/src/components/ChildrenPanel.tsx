@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { formatDate } from "../hooks/useWorkspace";
 import { Workflow, WorkflowInstance } from "../types/api";
+import Hint from "./Hint";
 
 interface Props {
   instance: WorkflowInstance;
@@ -83,7 +84,7 @@ export default function ChildrenPanel({ instance, workflow, canEdit }: Props) {
   return (
     <div className="card mt-4">
       <div className="card-header">
-        <h3>Sub-instances</h3>
+        <h3>Sub-instances <Hint tip="Smaller pieces of work that live inside this one — like test runs inside a release. Rules can stop the parent from finishing until every sub-instance is complete." /></h3>
         <div className="flex gap-2 items-center">
           <span className="badge badge-inactive">{done}/{total} complete</span>
           {canEdit && allowedNames.length > 0 && !instance.completed_at && (

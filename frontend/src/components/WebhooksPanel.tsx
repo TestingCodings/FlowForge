@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
 import { WebhookSubscription } from "../types/api";
+import Hint from "./Hint";
 
 const EVENT_OPTIONS = [
   { value: "instance_created",  label: "Instance created" },
@@ -69,7 +70,7 @@ export default function WebhooksPanel({ workflowId, canEdit }: Props) {
   return (
     <div className="card mt-4">
       <div className="card-header">
-        <h3>Webhooks</h3>
+        <h3>Webhooks <Hint tip="Automatic notifications to other systems. When something happens in this workflow (like a stage change), FlowForge sends a message to the web address you add — useful for Slack alerts or keeping other tools in sync." /></h3>
         <div className="flex gap-2 items-center">
           <span className="badge badge-inactive">{hooks.length}</span>
           {canEdit && (

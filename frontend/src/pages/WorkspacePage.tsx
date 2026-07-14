@@ -8,6 +8,7 @@ import {
   FONT_OPTIONS,
   useWorkspace,
 } from "../hooks/useWorkspace";
+import Hint from "../components/Hint";
 
 const THEME_FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "accent",         label: "Accent",           hint: "Buttons, links, highlights" },
@@ -124,7 +125,7 @@ export default function WorkspacePage() {
       <div className="grid grid-2">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="card">
-            <div className="card-header"><h3>Identity</h3></div>
+            <div className="card-header"><h3>Identity <Hint tip="The name, tagline, and logo shown in the sidebar for every user — replace the FlowForge branding with your own." below /></h3></div>
             <div className="form-group">
               <label>Workspace name</label>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Acme Corp" />
@@ -140,7 +141,7 @@ export default function WorkspacePage() {
           </div>
 
           <div className="card">
-            <div className="card-header"><h3>Formatting</h3></div>
+            <div className="card-header"><h3>Formatting <Hint tip="The font and date style used across the whole platform for every user." below /></h3></div>
             <div className="form-group">
               <label>Font</label>
               <select value={font} onChange={e => setFont(e.target.value)}>
@@ -161,7 +162,7 @@ export default function WorkspacePage() {
 
         <div className="card">
           <div className="card-header">
-            <h3>Theme</h3>
+            <h3>Theme <Hint tip="These colours restyle the whole platform for every user. Pick a preset or fine-tune individual colours — changes preview instantly and are applied for everyone when you save." below /></h3>
             <div className="flex gap-1">
               {PRESETS.map(p => (
                 <button

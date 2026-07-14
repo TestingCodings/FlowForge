@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { Workflow, FormDefinitionApi, FormField } from "../types/api";
 import StateGraph from "../components/StateGraph";
+import Hint from "../components/Hint";
 import WebhooksPanel from "../components/WebhooksPanel";
 import PresentationPanel from "../components/PresentationPanel";
 import { formatDate } from "../hooks/useWorkspace";
@@ -305,7 +306,7 @@ export default function WorkflowDetailPage() {
       <div className="grid grid-2 mb-4">
         <div className="card">
           <div className="card-header">
-            <h3>States</h3>
+            <h3>States <Hint tip="The stages an item can be in, from start to finish. Every item is always in exactly one state." below /></h3>
             <span className="badge badge-inactive">{wf.states?.length ?? 0}</span>
           </div>
           <table className="table">
@@ -330,7 +331,7 @@ export default function WorkflowDetailPage() {
 
         <div className="card">
           <div className="card-header">
-            <h3>Transitions</h3>
+            <h3>Transitions <Hint tip="The allowed moves between stages — the buttons people see on an item. A transition can require approver sign-off." below /></h3>
             <span className="badge badge-inactive">{wf.transitions?.length ?? 0}</span>
           </div>
           <table className="table">
@@ -360,7 +361,7 @@ export default function WorkflowDetailPage() {
       <div className="card">
         <div className="card-header">
           <div className="flex items-center gap-3">
-            <h3>Rules</h3>
+            <h3>Rules <Hint tip="Automatic checks that run when someone tries to move an item. A rule can block the move (with a message) or assign it to a role, based on the item's data." below /></h3>
             {(wf.rules ?? []).length > 0 && (
               <span className="badge badge-warning">{wf.rules.length} active</span>
             )}
@@ -621,7 +622,7 @@ export default function WorkflowDetailPage() {
       <div className="card mt-4">
         <div className="card-header">
           <div className="flex items-center gap-3">
-            <h3>State Forms</h3>
+            <h3>State Forms <Hint tip="Forms collect required information at each stage. If a form is marked as blocking, the item cannot leave that stage until the form is filled in." /></h3>
             {stateForms.length > 0 && (
               <span className="badge badge-active">{stateForms.length} configured</span>
             )}
@@ -789,7 +790,7 @@ export default function WorkflowDetailPage() {
       {versionHistory.length > 1 && (
         <div className="card mt-4">
           <div className="card-header">
-            <h3>Version history</h3>
+            <h3>Version history <Hint tip="Publishing creates a new editable version while items already in progress carry on under the version they started with." /></h3>
             <span className="badge badge-inactive">{versionHistory.length} versions</span>
           </div>
           {versionMsg && <div className="alert alert-success mb-3">{versionMsg}</div>}
