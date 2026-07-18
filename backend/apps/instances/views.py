@@ -290,9 +290,36 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"], url_path="metadata")
     def update_metadata(self, request, pk=None):
-        """Participant+ may edit metadata."""
+        """Participant+ may edit metadata. Supports If-Match for optimistic locking."""
+        from django.utils.dateparse import parse_datetime
+
         require_min_role(request.user, "participant", action="edit instance metadata")
         instance = self.get_object()
+
+        # Check If-Match precondition for optimistic locking
+        # If provided and doesn't match current updated_at, return 409 Conflict
+        if_match = request.META.get("HTTP_IF_MATCH")
+        if if_match:
+            try:
+                client_updated_at = parse_datetime(if_match)
+                # Compare as ISO format strings to avoid timezone precision issues
+                server_updated_at_iso = instance.updated_at.isoformat()
+                client_updated_at_iso = client_updated_at.isoformat() if client_updated_at else if_match
+
+                if client_updated_at_iso != server_updated_at_iso:
+                    return Response(
+                        {
+                            "detail": "Conflict: instance was modified by another user.",
+                            "current_instance": WorkflowInstanceSerializer(instance, context={"request": request}).data,
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {"detail": "Invalid If-Match format. Use ISO 8601 timestamp."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         new_meta = request.data.get("metadata_json")
         if not isinstance(new_meta, dict):
             return Response({"detail": "metadata_json must be an object."}, status=status.HTTP_400_BAD_REQUEST)
@@ -310,7 +337,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
             ip_address=request.META.get("REMOTE_ADDR", ""),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
-        return Response(WorkflowInstanceSerializer(instance).data)
+        return Response(WorkflowInstanceSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="children")
     def children(self, request, pk=None):

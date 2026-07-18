@@ -113,8 +113,14 @@ export default function InstanceDetailPage() {
   });
 
   const metaMutation = useMutation({
-    mutationFn: async (metadata_json: Record<string, unknown>) =>
-      (await apiClient.patch(`/instances/${id}/metadata/`, { metadata_json })).data,
+    mutationFn: async (metadata_json: Record<string, unknown>) => {
+      const headers: Record<string, string> = {};
+      // Optimistic locking: include If-Match header if we have the instance
+      if (instance?.updated_at) {
+        headers["If-Match"] = instance.updated_at;
+      }
+      return (await apiClient.patch(`/instances/${id}/metadata/`, { metadata_json }, { headers })).data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["instance", id] });
       qc.invalidateQueries({ queryKey: ["audit-trail", id] });
@@ -123,8 +129,23 @@ export default function InstanceDetailPage() {
       setMetaSaveOk(true);
       setTimeout(() => setMetaSaveOk(false), 3000);
     },
-    onError: (err: any) =>
-      setMetaSaveErr(err?.response?.data?.detail ?? "Failed to save metadata"),
+    onError: (err: any) => {
+      if (err?.response?.status === 409) {
+        // Conflict: show the server's current state for merge
+        const serverInstance = err?.response?.data?.current_instance;
+        if (serverInstance) {
+          setMetaSaveErr(
+            `Conflict: This instance was modified by another user. ` +
+            `Current server values: ${JSON.stringify(serverInstance.metadata_json || {})}. ` +
+            `Please refresh to see the latest changes.`
+          );
+        } else {
+          setMetaSaveErr("Conflict: Instance was modified by another user. Please refresh.");
+        }
+      } else {
+        setMetaSaveErr(err?.response?.data?.detail ?? "Failed to save metadata");
+      }
+    },
   });
 
   const commentMutation = useMutation({
