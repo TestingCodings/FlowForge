@@ -91,6 +91,54 @@ class WebhookSubscription(models.Model):
         return f"{self.url} ({'all' if not self.events else ','.join(self.events)})"
 
 
+class WebhookDeliveryStatus(models.TextChoices):
+    QUEUED = "queued", "Queued"
+    DELIVERED = "delivered", "Delivered"
+    FAILED = "failed", "Failed (Retrying)"
+    DEAD_LETTER = "dead_letter", "Dead Letter (Max Retries Exceeded)"
+
+
+class WebhookDeliveryLog(models.Model):
+    """Track webhook delivery attempts with exponential backoff retry logic."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    webhook_subscription = models.ForeignKey(
+        WebhookSubscription,
+        on_delete=models.CASCADE,
+        related_name="delivery_logs",
+    )
+    workflow_instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.CASCADE,
+        related_name="webhook_delivery_logs",
+    )
+    event_trigger = models.CharField(max_length=50)
+    payload = models.JSONField()  # Full JSON body being sent
+    status = models.CharField(
+        max_length=20,
+        choices=WebhookDeliveryStatus.choices,
+        default=WebhookDeliveryStatus.QUEUED,
+    )
+    attempt = models.PositiveSmallIntegerField(default=0)  # Current attempt (0-indexed)
+    http_status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "webhook_delivery_log"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "next_retry_at"]),
+            models.Index(fields=["webhook_subscription", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.webhook_subscription.url} {self.event_trigger} ({self.status})"
+
+
 class NotificationLog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workflow_instance = models.ForeignKey(

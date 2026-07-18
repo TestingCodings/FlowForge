@@ -91,15 +91,17 @@ def test_queue_event_creates_log(setup_context):
 
 @pytest.mark.django_db
 def test_webhook_subscription_fires_with_signature(setup_context, monkeypatch):
+    """Webhook should be delivered with correct HMAC signature (async)."""
     import hashlib
     import hmac as hmac_mod
     import json
 
-    from apps.notifications.models import WebhookSubscription
-    from apps.notifications import services
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog
+    from apps.notifications.tasks import _deliver_webhook_impl
+    from unittest.mock import MagicMock
 
     admin_user, wf, instance = setup_context
-    WebhookSubscription.objects.create(
+    sub = WebhookSubscription.objects.create(
         workflow_definition=wf,
         url="https://hooks.example.com/flowforge",
         events=["state_transition"],
@@ -112,6 +114,7 @@ def test_webhook_subscription_fires_with_signature(setup_context, monkeypatch):
     class FakeResponse:
         def raise_for_status(self):
             pass
+        status_code = 200
 
     def fake_post(url, content=None, headers=None, timeout=None):
         captured["url"] = url
@@ -119,16 +122,19 @@ def test_webhook_subscription_fires_with_signature(setup_context, monkeypatch):
         captured["headers"] = headers
         return FakeResponse()
 
-    monkeypatch.setattr(services.httpx, "post", fake_post)
+    import apps.notifications.tasks as tasks_module
+    monkeypatch.setattr(tasks_module.httpx, "post", fake_post)
 
-    logs = queue_event_notifications(
+    # Create a delivery log and deliver it directly
+    delivery_log = WebhookDeliveryLog.objects.create(
+        webhook_subscription=sub,
         workflow_instance=instance,
         event_trigger="state_transition",
-        context_data={"from_state": "Draft", "to_state": "Review"},
+        payload={"event": "state_transition", "instance": {"reference_number": instance.reference_number}, "data": {"to_state": "Review"}},
     )
 
-    assert len(logs) == 1
-    assert logs[0].status == NotificationStatus.SENT
+    _deliver_webhook_impl(str(delivery_log.id))
+
     assert captured["url"] == "https://hooks.example.com/flowforge"
     assert captured["headers"]["X-FlowForge-Event"] == "state_transition"
 
@@ -143,8 +149,9 @@ def test_webhook_subscription_fires_with_signature(setup_context, monkeypatch):
 
 @pytest.mark.django_db
 def test_webhook_subscription_respects_event_filter(setup_context, monkeypatch):
+    """Webhook should not be queued if event is not in the subscription's event filter."""
     from apps.notifications.models import WebhookSubscription
-    from apps.notifications import services
+    from unittest.mock import MagicMock
 
     admin_user, wf, instance = setup_context
     WebhookSubscription.objects.create(
@@ -154,10 +161,10 @@ def test_webhook_subscription_respects_event_filter(setup_context, monkeypatch):
         created_by=admin_user,
     )
 
-    monkeypatch.setattr(
-        services.httpx, "post",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")),
-    )
+    # Mock Celery to avoid Redis
+    import apps.notifications.tasks as tasks_module
+    mock_task = MagicMock()
+    monkeypatch.setattr(tasks_module, "deliver_webhook_task", mock_task)
 
     logs = queue_event_notifications(
         workflow_instance=instance,
@@ -165,24 +172,28 @@ def test_webhook_subscription_respects_event_filter(setup_context, monkeypatch):
         context_data={},
     )
     assert logs == []
+    # Should not have queued any tasks
+    assert not mock_task.delay.called
 
 
 @pytest.mark.django_db
 def test_webhook_failure_is_recorded_not_raised(setup_context, monkeypatch):
-    from apps.notifications.models import WebhookSubscription
-    from apps.notifications import services
+    """Webhook delivery failure should be recorded in delivery log (async)."""
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog, WebhookDeliveryStatus
+    from unittest.mock import MagicMock
 
     admin_user, wf, instance = setup_context
-    WebhookSubscription.objects.create(
+    sub = WebhookSubscription.objects.create(
         url="https://down.example.com/hook",  # global subscription (no workflow)
         events=[],
         created_by=admin_user,
     )
 
-    def fail_post(*a, **k):
-        raise ConnectionError("connection refused")
-
-    monkeypatch.setattr(services.httpx, "post", fail_post)
+    # Mock Celery to avoid Redis
+    import apps.notifications.tasks as tasks_module
+    mock_task = MagicMock()
+    mock_task.delay = MagicMock(return_value=MagicMock(id="task-123"))
+    monkeypatch.setattr(tasks_module, "deliver_webhook_task", mock_task)
 
     logs = queue_event_notifications(
         workflow_instance=instance,
@@ -190,8 +201,20 @@ def test_webhook_failure_is_recorded_not_raised(setup_context, monkeypatch):
         context_data={},
     )
     assert len(logs) == 1
-    assert logs[0].status == NotificationStatus.FAILED
-    assert "connection refused" in logs[0].error_message
+    assert logs[0].status == WebhookDeliveryStatus.QUEUED  # Queued initially
+
+    # Now simulate delivery failure
+    delivery_log = logs[0]
+    monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("connection refused")))
+
+    try:
+        tasks_module._deliver_webhook_impl(str(delivery_log.id))
+    except Exception:
+        pass
+
+    delivery_log.refresh_from_db()
+    assert delivery_log.status == WebhookDeliveryStatus.FAILED
+    assert "connection refused" in delivery_log.error_message
 
 
 # ---------------------------------------------------------------------------
@@ -246,3 +269,162 @@ def test_check_slas_notifies_once_per_state_entry(setup_context):
         ).count()
         == 1
     )
+
+
+# ---------------------------------------------------------------------------
+# Async webhook delivery with retries
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_emit_webhooks_creates_async_delivery_logs(setup_context, monkeypatch):
+    """Webhooks should be queued asynchronously, not delivered sync."""
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog, WebhookDeliveryStatus
+    from unittest.mock import MagicMock
+
+    admin_user, wf, instance = setup_context
+    sub = WebhookSubscription.objects.create(
+        workflow_definition=wf,
+        url="https://hooks.example.com/async",
+        events=["state_transition"],
+        created_by=admin_user,
+    )
+
+    # Mock Celery task to avoid needing Redis
+    import apps.notifications.tasks as tasks_module
+    mock_task = MagicMock()
+    mock_task.delay = MagicMock(return_value=MagicMock(id="task-123"))
+    monkeypatch.setattr(tasks_module, "deliver_webhook_task", mock_task)
+
+    logs = queue_event_notifications(
+        workflow_instance=instance,
+        event_trigger="state_transition",
+        context_data={"from_state": "Draft", "to_state": "Review"},
+    )
+
+    # Should create a WebhookDeliveryLog (async)
+    delivery_log = WebhookDeliveryLog.objects.get(webhook_subscription=sub)
+    assert delivery_log.status == WebhookDeliveryStatus.QUEUED
+    assert delivery_log.attempt == 0
+    assert delivery_log.payload["event"] == "state_transition"
+    # Should have queued the task
+    assert mock_task.delay.called
+
+
+@pytest.mark.django_db
+def test_webhook_delivery_task_success(setup_context, monkeypatch):
+    """Webhook delivery should mark log as delivered on HTTP 200."""
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog, WebhookDeliveryStatus
+    from apps.notifications.tasks import _deliver_webhook_impl
+    from unittest.mock import MagicMock
+
+    admin_user, wf, instance = setup_context
+    sub = WebhookSubscription.objects.create(
+        workflow_definition=wf,
+        url="https://hooks.example.com/success",
+        secret="mysecret",
+        created_by=admin_user,
+    )
+
+    delivery_log = WebhookDeliveryLog.objects.create(
+        webhook_subscription=sub,
+        workflow_instance=instance,
+        event_trigger="state_transition",
+        payload={"event": "state_transition", "instance": {"id": str(instance.id)}},
+        status=WebhookDeliveryStatus.QUEUED,
+    )
+
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+
+    import apps.notifications.tasks as tasks_module
+    monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: fake_response)
+
+    _deliver_webhook_impl(str(delivery_log.id))
+
+    delivery_log.refresh_from_db()
+    assert delivery_log.status == WebhookDeliveryStatus.DELIVERED
+    assert delivery_log.http_status_code == 200
+    assert delivery_log.delivered_at is not None
+
+
+@pytest.mark.django_db
+def test_webhook_delivery_retry_with_exponential_backoff(setup_context, monkeypatch):
+    """Webhook failures should retry with exponential backoff (1s, 2s, 4s, etc.)."""
+    from datetime import timedelta
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog, WebhookDeliveryStatus
+    from apps.notifications.tasks import _deliver_webhook_impl, MAX_WEBHOOK_RETRIES, get_retry_delay
+    from django.utils import timezone
+    from unittest.mock import MagicMock
+
+    admin_user, wf, instance = setup_context
+    sub = WebhookSubscription.objects.create(
+        workflow_definition=wf,
+        url="https://hooks.example.com/flaky",
+        created_by=admin_user,
+    )
+
+    delivery_log = WebhookDeliveryLog.objects.create(
+        webhook_subscription=sub,
+        workflow_instance=instance,
+        event_trigger="state_transition",
+        payload={"event": "state_transition"},
+        status=WebhookDeliveryStatus.QUEUED,
+        attempt=0,
+    )
+
+    # Simulate HTTP error
+    import apps.notifications.tasks as tasks_module
+    monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("timeout")))
+
+    # First retry
+    try:
+        _deliver_webhook_impl(str(delivery_log.id))
+    except Exception:
+        pass  # Expected to raise for retry
+
+    delivery_log.refresh_from_db()
+    assert delivery_log.status == WebhookDeliveryStatus.FAILED
+    assert delivery_log.attempt == 1
+    assert delivery_log.next_retry_at is not None
+
+    # Check exponential backoff: 2^1 = 2 seconds
+    expected_retry = timezone.now() + timedelta(seconds=get_retry_delay(1))
+    assert abs((delivery_log.next_retry_at - expected_retry).total_seconds()) < 5  # Within 5s tolerance
+
+
+@pytest.mark.django_db
+def test_webhook_delivery_dead_letter_after_max_retries(setup_context, monkeypatch):
+    """Webhooks should move to dead-letter after MAX_WEBHOOK_RETRIES."""
+    from apps.notifications.models import WebhookSubscription, WebhookDeliveryLog, WebhookDeliveryStatus
+    from apps.notifications.tasks import _deliver_webhook_impl, MAX_WEBHOOK_RETRIES
+    from unittest.mock import MagicMock
+
+    admin_user, wf, instance = setup_context
+    sub = WebhookSubscription.objects.create(
+        workflow_definition=wf,
+        url="https://hooks.example.com/dead",
+        created_by=admin_user,
+    )
+
+    delivery_log = WebhookDeliveryLog.objects.create(
+        webhook_subscription=sub,
+        workflow_instance=instance,
+        event_trigger="state_transition",
+        payload={"event": "state_transition"},
+        status=WebhookDeliveryStatus.FAILED,
+        attempt=MAX_WEBHOOK_RETRIES - 1,  # One before limit
+    )
+
+    import apps.notifications.tasks as tasks_module
+    monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("still down")))
+
+    try:
+        _deliver_webhook_impl(str(delivery_log.id))
+    except Exception:
+        pass
+
+    delivery_log.refresh_from_db()
+    assert delivery_log.status == WebhookDeliveryStatus.DEAD_LETTER
+    assert delivery_log.attempt == MAX_WEBHOOK_RETRIES
+    assert delivery_log.next_retry_at is None  # No further retries

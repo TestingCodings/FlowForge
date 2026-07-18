@@ -119,7 +119,11 @@ CELERY_BEAT_SCHEDULE = {
     "mark-overdue-tasks-hourly": {
         "task": "tasks.mark_overdue_tasks",
         "schedule": timedelta(hours=1),
-    }
+    },
+    "retry-failed-webhook-deliveries": {
+        "task": "apps.notifications.tasks.retry_failed_webhook_deliveries",
+        "schedule": timedelta(minutes=5),
+    },
 }
 
 # Logging

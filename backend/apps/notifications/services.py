@@ -13,6 +13,8 @@ from .models import (
     NotificationLog,
     NotificationStatus,
     NotificationTemplate,
+    WebhookDeliveryLog,
+    WebhookDeliveryStatus,
     WebhookSubscription,
 )
 
@@ -42,44 +44,42 @@ def sign_payload(secret: str, body: bytes) -> str:
 
 
 def emit_webhooks(workflow_instance, event_trigger, context_data=None):
-    """POST a signed JSON payload to every matching active subscription."""
+    """Queue webhook delivery to every matching active subscription (async, non-blocking)."""
     from django.db.models import Q
+    from .tasks import deliver_webhook_task, deliver_webhook
 
     subs = WebhookSubscription.objects.filter(is_active=True).filter(
         Q(workflow_definition=workflow_instance.workflow_definition)
         | Q(workflow_definition__isnull=True)
     )
     payload = build_event_payload(workflow_instance, event_trigger, context_data)
-    body = json.dumps(payload).encode()
 
     logs = []
     for sub in subs:
         if sub.events and event_trigger not in sub.events:
             continue
-        log = NotificationLog.objects.create(
+
+        delivery_log = WebhookDeliveryLog.objects.create(
+            webhook_subscription=sub,
             workflow_instance=workflow_instance,
             event_trigger=event_trigger,
-            channel=NotificationChannel.WEBHOOK,
-            recipient=sub.url,
-            subject=event_trigger,
-            body=body.decode(),
-            status=NotificationStatus.QUEUED,
+            payload=payload,
+            status=WebhookDeliveryStatus.QUEUED,
         )
-        logs.append(log)
-        headers = {"Content-Type": "application/json", "X-FlowForge-Event": event_trigger}
-        if sub.secret:
-            headers["X-FlowForge-Signature"] = sign_payload(sub.secret, body)
+        logs.append(delivery_log)
 
-        log.attempts += 1
         try:
-            response = httpx.post(sub.url, content=body, headers=headers, timeout=5)
-            response.raise_for_status()
-            log.status = NotificationStatus.SENT
-            log.sent_at = timezone.now()
-        except Exception as exc:
-            log.status = NotificationStatus.FAILED
-            log.error_message = str(exc)
-        log.save(update_fields=["status", "attempts", "error_message", "sent_at"])
+            deliver_webhook_task.delay(str(delivery_log.id))
+        except Exception:
+            # Fallback if Celery is unavailable
+            try:
+                from .tasks import deliver_webhook
+                deliver_webhook(str(delivery_log.id))
+            except Exception:
+                delivery_log.status = WebhookDeliveryStatus.FAILED
+                delivery_log.error_message = "Failed to queue delivery"
+                delivery_log.save(update_fields=["status", "error_message"])
+
     return logs
 
 
