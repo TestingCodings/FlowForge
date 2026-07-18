@@ -13,35 +13,44 @@ FlowForge is a configurable workflow automation platform that lets teams define 
 ## Architecture
 
 ```mermaid
-graph TD
-    subgraph Frontend ["Frontend (React 18 + TypeScript + Vite, port 5173)"]
-        UI[Pages and Components]
-        TQ[TanStack Query]
-        RF[React Flow canvas]
-    end
-
-    subgraph Backend ["Backend (Django 5 + DRF, port 8000)"]
-        API[REST API]
-        Engine[Workflow Engine]
-        Perms[Role Permission Layer]
-        Celery[Celery Workers]
-        AuditSvc[Audit Service]
-    end
-
-    subgraph Services ["Supporting Services"]
-        RulesMS["Rules Microservice (FastAPI, port 8001)"]
-        PG[(PostgreSQL)]
-        Redis[(Redis)]
-    end
-
-    UI --> TQ --> API
+graph LR
+    UI["🎨 React Pages & Components"]
+    TQ["📊 TanStack Query"]
+    RF["🖼️ React Flow Canvas"]
+    
+    API["🔌 REST API<br/>(Django 5 + DRF)"]
+    Engine["⚙️ Workflow Engine"]
+    RulesMS["⚡ Rules Service<br/>(FastAPI)"]
+    AuditSvc["📝 Audit Service"]
+    Perms["🔐 Role Layer"]
+    Celery["👷 Celery Workers"]
+    
+    PG["🗄️ PostgreSQL"]
+    Redis["🔴 Redis"]
+    
+    UI --> TQ
+    TQ --> API
     RF --> API
-    API --> Engine --> RulesMS
-    Engine --> AuditSvc
-    API --> Celery --> Redis
+    
+    API --> Engine
     API --> Perms
-    Backend --> PG
+    API --> Celery
+    
+    Engine --> RulesMS
+    Engine --> AuditSvc
+    
+    Celery --> Redis
+    
+    API --> PG
     RulesMS --> PG
+    
+    classDef frontend fill:#e1f5ff
+    classDef backend fill:#fff3e0
+    classDef services fill:#f3e5f5
+    
+    class UI,TQ,RF frontend
+    class API,Engine,Perms,AuditSvc,Celery backend
+    class RulesMS,PG,Redis services
 ```
 
 **Request path:** the React frontend talks exclusively to the Django REST API over JWT-authenticated requests. When a transition fires, the workflow engine evaluates any blocking rules by calling the FastAPI rules microservice (with a local Python fallback when the service is not running). Every state change, comment, and metadata edit is written to the immutable audit log. Celery handles async work such as notification delivery.
