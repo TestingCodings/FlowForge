@@ -251,7 +251,7 @@ The project is built in deliberate phases, each shipping a complete vertical sli
 | 11 | Instance containers: sub-instances with allow-lists, roll-up progress, hierarchy-aware rules | Done |
 | 12 | Layer 3: Docker Compose + PostgreSQL production setup, embedded widget, full app export | Planned |
 
-See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs/UX.md](docs/UX.md) for the usability roadmap, and [docs/API.md](docs/API.md) for the complete API reference.
+See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs/ENHANCEMENT.md](docs/ENHANCEMENT.md) for strengthening phases 1–11, [docs/UX.md](docs/UX.md) for the usability roadmap, and [docs/API.md](docs/API.md) for the complete API reference.
 
 ---
 
