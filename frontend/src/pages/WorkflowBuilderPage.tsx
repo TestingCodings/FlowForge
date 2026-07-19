@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -67,6 +67,35 @@ function StateNode({ data, selected }: NodeProps) {
 
 const nodeTypes = { stateNode: StateNode };
 
+/* ─── Draft persistence + undo history ─── */
+const DRAFT_KEY = "flowforge:builder-draft";
+const HISTORY_LIMIT = 50;
+
+interface Snapshot {
+  nodes: Node[];
+  edges: Edge[];
+}
+
+interface BuilderDraft extends Snapshot {
+  wfName: string;
+  wfDesc: string;
+  wfPrefix: string;
+  wfActive: boolean;
+  savedAt: string;
+}
+
+function loadDraft(): BuilderDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as BuilderDraft;
+    if (!Array.isArray(draft.nodes) || !Array.isArray(draft.edges)) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
 /* ─── Default empty state for new node ─── */
 function makeNode(id: string, position: { x: number; y: number }, isInitial = false): Node {
   return {
@@ -114,8 +143,44 @@ export default function WorkflowBuilderPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [saveSuccess, setSaveSuccess] = useState("");
 
+  // Draft found in localStorage at mount (offer resume until acted on)
+  const [pendingDraft, setPendingDraft] = useState<BuilderDraft | null>(() => loadDraft());
+
+  // Undo/redo history (structural changes + node moves)
+  const past = useRef<Snapshot[]>([]);
+  const future = useRef<Snapshot[]>([]);
+  const [, setHistoryVersion] = useState(0); // re-render for button disabled state
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
+
+  const takeSnapshot = useCallback(() => {
+    past.current = [...past.current.slice(-(HISTORY_LIMIT - 1)), { nodes, edges }];
+    future.current = [];
+    setHistoryVersion((v) => v + 1);
+  }, [nodes, edges]);
+
+  const undo = useCallback(() => {
+    const prev = past.current.pop();
+    if (!prev) return;
+    future.current.push({ nodes, edges });
+    setNodes(prev.nodes);
+    setEdges(prev.edges);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setHistoryVersion((v) => v + 1);
+  }, [nodes, edges, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+    const next = future.current.pop();
+    if (!next) return;
+    past.current.push({ nodes, edges });
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setHistoryVersion((v) => v + 1);
+  }, [nodes, edges, setNodes, setEdges]);
 
   /* ─── Callbacks ─── */
   const onConnect = useCallback((conn: Connection) => {
@@ -129,6 +194,7 @@ export default function WorkflowBuilderPage() {
 
   const confirmConnection = () => {
     if (!pendingConn) return;
+    takeSnapshot();
     const id = `e${pendingConn.source}-${pendingConn.target}`;
     setEdges((eds) => addEdge({
       ...pendingConn,
@@ -145,6 +211,7 @@ export default function WorkflowBuilderPage() {
   };
 
   const addState = () => {
+    takeSnapshot();
     const id = String(nodeIdRef.current++);
     const x = 80 + (nodes.length % 4) * 200;
     const y = 80 + Math.floor(nodes.length / 4) * 130;
@@ -154,6 +221,8 @@ export default function WorkflowBuilderPage() {
   };
 
   const deleteSelected = () => {
+    if (!selectedNodeId && !selectedEdgeId) return;
+    takeSnapshot();
     if (selectedNodeId) {
       setNodes((ns) => ns.filter((n) => n.id !== selectedNodeId));
       setEdges((es) => es.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
@@ -269,6 +338,63 @@ export default function WorkflowBuilderPage() {
     };
   };
 
+  /* ─── Draft persistence (debounced autosave to localStorage) ─── */
+  useEffect(() => {
+    // Don't clobber a not-yet-resumed draft with the pristine initial canvas
+    if (pendingDraft) return;
+    const dirty = nodes.length > 1 || edges.length > 0 || wfName.trim() !== "" || wfDesc.trim() !== "";
+    const t = setTimeout(() => {
+      if (!dirty) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      const draft: BuilderDraft = {
+        nodes, edges, wfName, wfDesc, wfPrefix, wfActive,
+        savedAt: new Date().toISOString(),
+      };
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [nodes, edges, wfName, wfDesc, wfPrefix, wfActive, pendingDraft]);
+
+  const resumeDraft = () => {
+    if (!pendingDraft) return;
+    setNodes(pendingDraft.nodes);
+    setEdges(pendingDraft.edges);
+    setWfName(pendingDraft.wfName ?? "");
+    setWfDesc(pendingDraft.wfDesc ?? "");
+    setWfPrefix(pendingDraft.wfPrefix ?? "WFF");
+    setWfActive(pendingDraft.wfActive ?? true);
+    const maxId = Math.max(0, ...pendingDraft.nodes.map((n) => Number(n.id)).filter(Number.isFinite));
+    nodeIdRef.current = maxId + 1;
+    setPendingDraft(null);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setPendingDraft(null);
+  };
+
+  /* ─── Keyboard: undo/redo/delete (skip while typing in a field) ─── */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const errs = validate();
@@ -277,6 +403,7 @@ export default function WorkflowBuilderPage() {
       return (await apiClient.post("/workflows/", buildPayload())).data;
     },
     onSuccess: (data) => {
+      localStorage.removeItem(DRAFT_KEY);
       qc.invalidateQueries({ queryKey: ["workflows"] });
       setSaveSuccess(`Saved! Redirecting to ${data.name}…`);
       setTimeout(() => navigate(`/workflows/${data.id}`), 1200);
@@ -328,6 +455,24 @@ export default function WorkflowBuilderPage() {
 
         <div style={{ flex: 1 }} />
 
+        <button
+          className="btn-secondary btn-sm hint"
+          onClick={undo}
+          disabled={past.current.length === 0}
+          data-hint="Undo (Ctrl+Z)"
+          style={{ padding: "4px 10px" }}
+        >
+          ↩
+        </button>
+        <button
+          className="btn-secondary btn-sm hint"
+          onClick={redo}
+          disabled={future.current.length === 0}
+          data-hint="Redo (Ctrl+Shift+Z)"
+          style={{ padding: "4px 10px" }}
+        >
+          ↪
+        </button>
         <button className="btn-secondary btn-sm" onClick={addState}>
           + Add State
         </button>
@@ -345,6 +490,21 @@ export default function WorkflowBuilderPage() {
           {saveMutation.isPending ? "Saving…" : "Save Workflow"}
         </button>
       </div>
+
+      {/* Resume draft banner */}
+      {pendingDraft && (
+        <div className="alert" style={{
+          margin: "8px 16px", flexShrink: 0, display: "flex", alignItems: "center", gap: 12,
+          background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px",
+        }}>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", flex: 1 }}>
+            You have an unsaved draft{pendingDraft.wfName ? ` — "${pendingDraft.wfName}"` : ""} from{" "}
+            {new Date(pendingDraft.savedAt).toLocaleString()}. Resume it?
+          </span>
+          <button className="btn-primary btn-sm" onClick={resumeDraft}>Resume draft</button>
+          <button className="btn-secondary btn-sm" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
 
       {/* Errors */}
       {errors.length > 0 && (
@@ -370,6 +530,7 @@ export default function WorkflowBuilderPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeDragStart={() => takeSnapshot()}
             onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
             onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(null); }}
             onPaneClick={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}

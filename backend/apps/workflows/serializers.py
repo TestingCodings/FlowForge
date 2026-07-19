@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import Rule, State, Transition, WorkflowDefinition
@@ -119,6 +120,7 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
                 )
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         state_data = validated_data.pop("states", [])
         transition_data = validated_data.pop("transitions", [])
