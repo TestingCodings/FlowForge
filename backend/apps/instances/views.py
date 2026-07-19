@@ -302,9 +302,11 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         if if_match:
             try:
                 client_updated_at = parse_datetime(if_match)
+                if client_updated_at is None:
+                    raise ValueError("Invalid ISO 8601 timestamp")
                 # Compare as ISO format strings to avoid timezone precision issues
                 server_updated_at_iso = instance.updated_at.isoformat()
-                client_updated_at_iso = client_updated_at.isoformat() if client_updated_at else if_match
+                client_updated_at_iso = client_updated_at.isoformat()
 
                 if client_updated_at_iso != server_updated_at_iso:
                     return Response(
