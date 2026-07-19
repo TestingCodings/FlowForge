@@ -17,6 +17,7 @@ class StateSerializer(serializers.ModelSerializer):
             "position_order",
             "sla_config",
             "task_config",
+            "canvas_position",
         )
         read_only_fields = ("id",)
 
@@ -141,6 +142,7 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
                 position_order=state_payload.get("position_order", i),
                 sla_config=state_payload.get("sla_config", {}),
                 task_config=state_payload.get("task_config", {}),
+                canvas_position=state_payload.get("canvas_position", {}),
             )
             state_map[state.name] = state
 

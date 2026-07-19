@@ -256,6 +256,14 @@ export default function WorkflowDetailPage() {
               Open {wf.ui_schema?.shell} view
             </Link>
           )}
+          <Link
+            to={`/workflows/${id}/edit`}
+            className="btn-secondary btn-sm"
+            style={{ textDecoration: "none" }}
+            title="Open this workflow's graph in the visual builder"
+          >
+            Edit in Builder
+          </Link>
           <button
             className="btn-secondary btn-sm"
             onClick={exportBundle}

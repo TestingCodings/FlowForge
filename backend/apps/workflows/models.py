@@ -54,6 +54,8 @@ class State(models.Model):
     sla_config = models.JSONField(default=dict, blank=True)
     # task_config: {"requires_task": true, "title_template": "...", "description": "...", "default_role": "handler"}
     task_config = models.JSONField(default=dict, blank=True)
+    # Builder canvas coordinates: {"x": 120, "y": 80} — empty until placed in the visual builder
+    canvas_position = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "workflow_state"

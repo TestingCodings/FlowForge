@@ -15,8 +15,8 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../api/client";
 
 /* ─── Types ─── */
@@ -27,6 +27,7 @@ interface StateNodeData {
   slaHours: number;
   requiresTask: boolean;
   defaultRole: string;
+  serverId?: string; // set when hydrated from an existing workflow
 }
 
 /* ─── Custom node ─── */
@@ -113,11 +114,33 @@ function makeNode(id: string, position: { x: number; y: number }, isInitial = fa
   };
 }
 
+/* ─── Edge factory (shared by connect dialog + hydration) ─── */
+function makeEdge(
+  id: string, source: string, target: string,
+  name: string, requiresApproval: boolean, serverId?: string,
+): Edge {
+  return {
+    id, source, target,
+    label: name,
+    labelStyle: { fontSize: 11, fill: "#8b949e", fontWeight: 500 },
+    labelBgStyle: { fill: "#161b22" },
+    labelBgPadding: [4, 4] as [number, number],
+    style: requiresApproval
+      ? { stroke: "#d29922", strokeWidth: 1.5, strokeDasharray: "6,3" }
+      : { stroke: "#6366f1", strokeWidth: 1.5 },
+    markerEnd: { type: "arrowclosed" as any, color: requiresApproval ? "#d29922" : "#6366f1" },
+    data: { name, requiresApproval, serverId },
+  };
+}
+
 /* ─── Main page ─── */
 export default function WorkflowBuilderPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = Boolean(editId);
   const nodeIdRef = useRef(2);
+  const hydratedRef = useRef(false);
 
   // Workflow metadata
   const [wfName, setWfName] = useState("");
@@ -143,8 +166,21 @@ export default function WorkflowBuilderPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [saveSuccess, setSaveSuccess] = useState("");
 
-  // Draft found in localStorage at mount (offer resume until acted on)
-  const [pendingDraft, setPendingDraft] = useState<BuilderDraft | null>(() => loadDraft());
+  // Draft found in localStorage at mount (offer resume until acted on).
+  // Edit mode skips drafts entirely — the server graph is the source of truth.
+  const [pendingDraft, setPendingDraft] = useState<BuilderDraft | null>(() =>
+    isEdit ? null : loadDraft()
+  );
+
+  // 409 from compose: workflow has instances, offer publish-new-version flow
+  const [conflict, setConflict] = useState<string | null>(null);
+
+  // Load the workflow being edited
+  const { data: editWf, isLoading: editLoading } = useQuery({
+    queryKey: ["workflow", editId],
+    queryFn: async () => (await apiClient.get(`/workflows/${editId}/`)).data,
+    enabled: isEdit,
+  });
 
   // Undo/redo history (structural changes + node moves)
   const past = useRef<Snapshot[]>([]);
@@ -196,17 +232,10 @@ export default function WorkflowBuilderPage() {
     if (!pendingConn) return;
     takeSnapshot();
     const id = `e${pendingConn.source}-${pendingConn.target}`;
-    setEdges((eds) => addEdge({
-      ...pendingConn,
-      id,
-      label: pendingTransName,
-      labelStyle: { fontSize: 11, fill: "#8b949e", fontWeight: 500 },
-      labelBgStyle: { fill: "#161b22" },
-      labelBgPadding: [4, 4] as [number, number],
-      style: { stroke: "#6366f1", strokeWidth: 1.5 },
-      markerEnd: { type: "arrowclosed" as any, color: "#6366f1" },
-      data: { name: pendingTransName, requiresApproval: false },
-    }, eds));
+    setEdges((eds) => addEdge(
+      makeEdge(id, pendingConn.source!, pendingConn.target!, pendingTransName, false),
+      eds,
+    ));
     setPendingConn(null);
   };
 
@@ -303,6 +332,7 @@ export default function WorkflowBuilderPage() {
     const statePayloads = nodes.map((n, i) => {
       const d = n.data as StateNodeData;
       return {
+        ...(d.serverId ? { id: d.serverId } : {}),
         name: d.label.trim(),
         display_name: d.label.trim(),
         is_initial: d.isInitial,
@@ -313,13 +343,16 @@ export default function WorkflowBuilderPage() {
           requires_task: d.requiresTask && !d.isTerminal,
           default_role: d.defaultRole || "participant",
         },
+        canvas_position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
       };
     });
 
     const transPayloads = edges.map((e) => {
       const fromNode = nodes.find((n) => n.id === e.source);
       const toNode   = nodes.find((n) => n.id === e.target);
+      const serverId = (e.data as any)?.serverId;
       return {
+        ...(serverId ? { id: serverId } : {}),
         name: ((e.data as any)?.name || e.label || "Transition") as string,
         from_state: ((fromNode?.data as StateNodeData)?.label ?? "").trim(),
         to_state:   ((toNode?.data as StateNodeData)?.label ?? "").trim(),
@@ -331,15 +364,63 @@ export default function WorkflowBuilderPage() {
       name: wfName.trim(),
       description: wfDesc.trim(),
       reference_prefix: wfPrefix.trim().toUpperCase().slice(0, 10),
-      version: 1,
+      ...(isEdit ? {} : { version: 1 }),
       is_active: wfActive,
       states: statePayloads,
       transitions: transPayloads,
     };
   };
 
-  /* ─── Draft persistence (debounced autosave to localStorage) ─── */
+  /* ─── Hydrate canvas from an existing workflow (edit mode) ─── */
   useEffect(() => {
+    if (!isEdit || !editWf || hydratedRef.current) return;
+
+    setWfName(editWf.name ?? "");
+    setWfDesc(editWf.description ?? "");
+    setWfPrefix(editWf.reference_prefix ?? "WFF");
+    setWfActive(Boolean(editWf.is_active));
+
+    const states = [...(editWf.states ?? [])].sort(
+      (a: any, b: any) => a.position_order - b.position_order
+    );
+    const hydratedNodes: Node[] = states.map((s: any, i: number) => ({
+      id: String(s.id),
+      type: "stateNode",
+      position:
+        s.canvas_position && typeof s.canvas_position.x === "number"
+          ? { x: s.canvas_position.x, y: s.canvas_position.y }
+          : { x: 80 + (i % 4) * 220, y: 80 + Math.floor(i / 4) * 140 },
+      data: {
+        label: s.name,
+        isInitial: Boolean(s.is_initial),
+        isTerminal: Boolean(s.is_terminal),
+        slaHours: Number(s.sla_config?.sla_hours ?? 0),
+        requiresTask: Boolean(s.task_config?.requires_task ?? true),
+        defaultRole: s.task_config?.default_role ?? "participant",
+        serverId: String(s.id),
+      } as StateNodeData,
+    }));
+    const hydratedEdges: Edge[] = (editWf.transitions ?? []).map((t: any) =>
+      makeEdge(
+        String(t.id), String(t.from_state), String(t.to_state),
+        t.name, Boolean(t.requires_approval), String(t.id),
+      )
+    );
+    // Edges land one frame after nodes: xyflow drops edges applied in the
+    // same commit that replaces all nodes (skipped before measurement).
+    // hydratedRef flips inside the timer so a StrictMode double-invoke
+    // (which clears the first timer via cleanup) still hydrates once.
+    setNodes(hydratedNodes);
+    const t = setTimeout(() => {
+      hydratedRef.current = true;
+      setEdges(hydratedEdges);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isEdit, editWf, setNodes, setEdges]);
+
+  /* ─── Draft persistence (debounced autosave to localStorage; create mode only) ─── */
+  useEffect(() => {
+    if (isEdit) return;
     // Don't clobber a not-yet-resumed draft with the pristine initial canvas
     if (pendingDraft) return;
     const dirty = nodes.length > 1 || edges.length > 0 || wfName.trim() !== "" || wfDesc.trim() !== "";
@@ -400,19 +481,73 @@ export default function WorkflowBuilderPage() {
       const errs = validate();
       if (errs.length) { setErrors(errs); throw new Error("validation"); }
       setErrors([]);
+      setConflict(null);
+      if (isEdit) {
+        return (await apiClient.put(`/workflows/${editId}/compose/`, buildPayload())).data;
+      }
       return (await apiClient.post("/workflows/", buildPayload())).data;
     },
     onSuccess: (data) => {
-      localStorage.removeItem(DRAFT_KEY);
+      if (!isEdit) localStorage.removeItem(DRAFT_KEY);
       qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["workflow", editId] });
       setSaveSuccess(`Saved! Redirecting to ${data.name}…`);
       setTimeout(() => navigate(`/workflows/${data.id}`), 1200);
     },
     onError: (err: any) => {
-      if (err.message !== "validation") {
-        const detail = err?.response?.data;
-        setErrors([typeof detail === "string" ? detail : JSON.stringify(detail)]);
+      if (err.message === "validation") return;
+      if (err?.response?.status === 409) {
+        setConflict(err.response.data?.detail ?? "This workflow has instances.");
+        return;
       }
+      const detail = err?.response?.data;
+      const list = Array.isArray(detail?.detail) ? detail.detail
+        : [typeof detail === "string" ? detail : JSON.stringify(detail)];
+      setErrors(list);
+    },
+  });
+
+  /* 409 recovery: publish a draft clone, remap ids by name, apply edits to it */
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      const pub = (await apiClient.post(`/workflows/${editId}/publish-new-version/`)).data;
+      const payload = buildPayload();
+      const stateIdByName = new Map<string, string>(
+        (pub.states ?? []).map((s: any) => [s.name, String(s.id)])
+      );
+      const stateNameById = new Map<string, string>(
+        (pub.states ?? []).map((s: any) => [String(s.id), s.name])
+      );
+      const transIdByKey = new Map<string, string>(
+        (pub.transitions ?? []).map((t: any) => [
+          `${stateNameById.get(String(t.from_state))}→${stateNameById.get(String(t.to_state))}→${t.name}`,
+          String(t.id),
+        ])
+      );
+      // Stale ids belong to the old version — remap to the clone's ids where
+      // names still match (preserves cloned forms/rules on unrenamed entities)
+      payload.states = payload.states.map((s: any) => {
+        const { id: _old, ...rest } = s;
+        const cloneId = stateIdByName.get(rest.name);
+        return cloneId ? { id: cloneId, ...rest } : rest;
+      });
+      payload.transitions = payload.transitions.map((t: any) => {
+        const { id: _old, ...rest } = t;
+        const cloneId = transIdByKey.get(`${rest.from_state}→${rest.to_state}→${rest.name}`);
+        return cloneId ? { id: cloneId, ...rest } : rest;
+      });
+      payload.name = pub.name; // clone's draft name avoids the unique-name clash
+      return (await apiClient.put(`/workflows/${pub.id}/compose/`, payload)).data;
+    },
+    onSuccess: (data) => {
+      setConflict(null);
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      setSaveSuccess(`Published ${data.name} with your changes. Redirecting…`);
+      setTimeout(() => navigate(`/workflows/${data.id}`), 1200);
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data;
+      setErrors([typeof detail === "string" ? detail : JSON.stringify(detail)]);
     },
   });
 
@@ -426,8 +561,11 @@ export default function WorkflowBuilderPage() {
         flexShrink: 0,
       }}>
         <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--accent-light)", marginRight: 4 }}>
-          Workflow Builder
+          {isEdit ? "Edit Workflow" : "Workflow Builder"}
         </div>
+        {isEdit && editLoading && (
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Loading…</span>
+        )}
 
         <input
           placeholder="Workflow name *"
@@ -487,7 +625,7 @@ export default function WorkflowBuilderPage() {
           disabled={saveMutation.isPending}
           style={{ minWidth: 120 }}
         >
-          {saveMutation.isPending ? "Saving…" : "Save Workflow"}
+          {saveMutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Save Workflow"}
         </button>
       </div>
 
@@ -503,6 +641,24 @@ export default function WorkflowBuilderPage() {
           </span>
           <button className="btn-primary btn-sm" onClick={resumeDraft}>Resume draft</button>
           <button className="btn-secondary btn-sm" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
+
+      {/* Compose conflict: workflow has instances */}
+      {conflict && (
+        <div className="alert alert-error" style={{
+          margin: "8px 16px", flexShrink: 0, display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <span style={{ flex: 1 }}>{conflict}</span>
+          <button
+            className="btn-primary btn-sm"
+            onClick={() => publishMutation.mutate()}
+            disabled={publishMutation.isPending}
+            style={{ flexShrink: 0 }}
+          >
+            {publishMutation.isPending ? "Publishing…" : "Publish new version with these changes"}
+          </button>
+          <button className="btn-secondary btn-sm" onClick={() => setConflict(null)}>Cancel</button>
         </div>
       )}
 

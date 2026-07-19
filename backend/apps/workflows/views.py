@@ -1,5 +1,6 @@
 import uuid
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -106,6 +107,126 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
             )
 
         return Response(WorkflowDefinitionSerializer(new_wf).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["put"], url_path="compose")
+    def compose(self, request, pk=None):
+        """
+        Diff-update the full graph (workflow metadata + states + transitions)
+        from the visual builder in one atomic request.
+
+        Payload states/transitions may carry an `id` — those are updated in
+        place (preserving attached forms and rules); entries without an id are
+        created; existing rows absent from the payload are deleted.
+
+        Refused with 409 if the workflow has instances — publish a new
+        version instead (the builder offers this flow on 409).
+        """
+        require_min_role(request.user, "workflow_designer", action="edit a workflow definition")
+        workflow = self.get_object()
+
+        instance_count = workflow.instances.count()
+        if instance_count:
+            return Response(
+                {
+                    "detail": (
+                        f"This workflow has {instance_count} instance(s); its graph cannot be "
+                        "edited in place. Publish a new version and edit that instead."
+                    ),
+                    "instance_count": instance_count,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        states_payload = request.data.get("states", [])
+        transitions_payload = request.data.get("transitions", [])
+        errors = []
+        if not states_payload:
+            errors.append("At least one state is required.")
+        initials = [s for s in states_payload if s.get("is_initial")]
+        if len(initials) != 1:
+            errors.append("Exactly one state must be marked as initial.")
+        names = [str(s.get("name", "")).strip() for s in states_payload]
+        if any(not n for n in names):
+            errors.append("All states must have a name.")
+        if len(set(names)) != len(names):
+            errors.append("State names must be unique.")
+        for tr in transitions_payload:
+            if tr.get("from_state") not in names or tr.get("to_state") not in names:
+                errors.append(f"Transition '{tr.get('name')}' references an unknown state.")
+        if errors:
+            return Response({"detail": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            for field in ("name", "description", "reference_prefix", "is_active"):
+                if field in request.data:
+                    setattr(workflow, field, request.data[field])
+            workflow.save()
+
+            existing_states = {str(s.id): s for s in workflow.states.all()}
+            payload_state_ids = {str(s["id"]) for s in states_payload if s.get("id")}
+
+            # Delete states removed from the canvas (cascades their forms/transitions)
+            for sid, state in existing_states.items():
+                if sid not in payload_state_ids:
+                    state.delete()
+
+            # Two-pass update dodges the unique (workflow, name) / (workflow,
+            # position_order) constraints when states are renamed or reordered
+            # into each other's slots.
+            kept = [s for s in states_payload if str(s.get("id", "")) in existing_states]
+            for i, sp in enumerate(kept):
+                state = existing_states[str(sp["id"])]
+                state.name = f"__tmp__{uuid.uuid4().hex[:12]}"
+                state.position_order = 10000 + i
+                state.save(update_fields=["name", "position_order"])
+
+            state_by_name = {}
+            for i, sp in enumerate(states_payload, start=1):
+                shared = dict(
+                    name=str(sp["name"]).strip(),
+                    display_name=sp.get("display_name", ""),
+                    is_initial=sp.get("is_initial", False),
+                    is_terminal=sp.get("is_terminal", False),
+                    position_order=sp.get("position_order", i),
+                    sla_config=sp.get("sla_config", {}),
+                    task_config=sp.get("task_config", {}),
+                    canvas_position=sp.get("canvas_position", {}),
+                )
+                sid = str(sp.get("id", ""))
+                if sid in existing_states:
+                    state = existing_states[sid]
+                    for k, v in shared.items():
+                        setattr(state, k, v)
+                    state.save()
+                else:
+                    state = State.objects.create(workflow_definition=workflow, **shared)
+                state_by_name[state.name] = state
+
+            existing_transitions = {str(t.id): t for t in workflow.transitions.all()}
+            payload_transition_ids = {str(t["id"]) for t in transitions_payload if t.get("id")}
+            for tid, tr in existing_transitions.items():
+                if tid not in payload_transition_ids:
+                    tr.delete()  # cascades transition-scoped rules
+
+            for tp in transitions_payload:
+                shared = dict(
+                    from_state=state_by_name[tp["from_state"]],
+                    to_state=state_by_name[tp["to_state"]],
+                    name=tp.get("name", "Transition"),
+                    display_name=tp.get("display_name", ""),
+                    requires_approval=tp.get("requires_approval", False),
+                )
+                tid = str(tp.get("id", ""))
+                if tid in existing_transitions:
+                    tr = existing_transitions[tid]
+                    for k, v in shared.items():
+                        setattr(tr, k, v)
+                    tr.save()
+                else:
+                    Transition.objects.create(workflow_definition=workflow, **shared)
+
+        workflow.refresh_from_db()
+        return Response(WorkflowDefinitionSerializer(workflow).data)
 
     @action(detail=True, methods=["get"], url_path="version-history")
     def version_history(self, request, pk=None):
