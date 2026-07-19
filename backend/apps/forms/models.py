@@ -46,6 +46,7 @@ class FormSubmission(models.Model):
     form_definition = models.ForeignKey(
         FormDefinition, on_delete=models.PROTECT, related_name="submissions"
     )
+    form_definition_version = models.PositiveIntegerField(default=1)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -61,4 +62,4 @@ class FormSubmission(models.Model):
         ordering = ["-submitted_at"]
 
     def __str__(self):
-        return f"{self.form_definition.name} for {self.workflow_instance.reference_number}"
+        return f"{self.form_definition.name} v{self.form_definition_version} for {self.workflow_instance.reference_number}"

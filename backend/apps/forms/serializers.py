@@ -41,11 +41,12 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
             "id",
             "workflow_instance",
             "form_definition",
+            "form_definition_version",
             "submitted_by",
             "submitted_at",
             "data",
         )
-        read_only_fields = ("id", "submitted_by", "submitted_at")
+        read_only_fields = ("id", "submitted_by", "submitted_at", "form_definition_version")
 
     def validate(self, attrs):
         workflow_instance: WorkflowInstance = attrs["workflow_instance"]
@@ -61,6 +62,9 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # Capture form version at submission time for historical accuracy
+        form_def = validated_data["form_definition"]
+        validated_data["form_definition_version"] = form_def.version
         submission = FormSubmission.objects.create(submitted_by=self.context["request"].user, **validated_data)
 
         # Merge submitted values into instance metadata so rules can evaluate them

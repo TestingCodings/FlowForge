@@ -21,6 +21,28 @@ class FormDefinitionViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         require_min_role(request.user, "workflow_designer", action="edit a form definition")
+        instance = self.get_object()
+
+        # Check if form has submissions: if yes, create new version instead of editing
+        if instance.submissions.exists():
+            # Create new version instead of modifying the existing one
+            new_version_data = request.data.copy()
+            new_version_data["version"] = instance.version + 1
+            new_version_data["workflow_definition"] = instance.workflow_definition_id
+            new_version_data["state"] = instance.state_id
+
+            serializer = self.get_serializer(data=new_version_data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            return Response(
+                {
+                    "detail": "Form has submissions. Created new version instead.",
+                    "form": serializer.data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        # No submissions: safe to edit
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
