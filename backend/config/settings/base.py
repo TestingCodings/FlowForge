@@ -124,6 +124,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.notifications.tasks.retry_failed_webhook_deliveries",
         "schedule": timedelta(minutes=5),
     },
+    "check-slas-every-minute": {
+        "task": "apps.notifications.tasks.check_slas_scheduled",
+        "schedule": timedelta(minutes=1),
+    },
 }
 
 # Logging

@@ -1,13 +1,21 @@
 import hashlib
 import hmac
 import json
+import logging
 
 from celery import shared_task
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.db import IntegrityError, OperationalError
 import httpx
 
-from .models import WebhookDeliveryLog, WebhookDeliveryStatus
-from .services import dispatch_notification, sign_payload
+from .models import WebhookDeliveryLog, WebhookDeliveryStatus, EventTrigger
+from .services import dispatch_notification, sign_payload, queue_event_notifications
+from apps.audit.models import AuditActionType, AuditLog
+from apps.instances.models import WorkflowInstance
+from apps.instances.serializers import _sla_status
+
+logger = logging.getLogger(__name__)
 
 
 MAX_WEBHOOK_RETRIES = 6
@@ -114,3 +122,78 @@ def retry_failed_webhook_deliveries():
             deliver_webhook.delay(str(log.id))
         except Exception:
             pass
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def check_slas_scheduled(self):
+    """Celery Beat task to scan open instances for SLA breaches and fire notifications.
+
+    Runs periodically and is idempotent: an instance is notified at most once per state entry.
+    Retries on transient DB lock failures (IntegrityError, OperationalError).
+    """
+    try:
+        open_instances = WorkflowInstance.objects.filter(
+            completed_at__isnull=True
+        ).select_related("workflow_definition", "current_state")
+
+        checked = breached = notified = 0
+        for instance in open_instances:
+            sla = _sla_status(instance)
+            checked += 1
+            if not sla or sla["status"] != "breached":
+                continue
+            breached += 1
+
+            # Dedupe: the audit log records one breach per entry into the state
+            try:
+                already_notified = AuditLog.objects.filter(
+                    workflow_instance=instance,
+                    action_type=AuditActionType.SLA_BREACHED,
+                    created_at__gte=parse_datetime(sla["entered_at"]),
+                ).exists()
+                if already_notified:
+                    continue
+
+                AuditLog.objects.create(
+                    workflow_instance=instance,
+                    actor=None,
+                    action_type=AuditActionType.SLA_BREACHED,
+                    from_state=instance.current_state.name,
+                    payload={
+                        "sla_hours": sla["sla_hours"],
+                        "elapsed_hours": sla["elapsed_hours"],
+                    },
+                )
+                queue_event_notifications(
+                    workflow_instance=instance,
+                    event_trigger=EventTrigger.SLA_BREACHED,
+                    context_data={
+                        "instance": {"reference_number": instance.reference_number},
+                        "state": instance.current_state.name,
+                        "sla_hours": sla["sla_hours"],
+                        "elapsed_hours": sla["elapsed_hours"],
+                    },
+                )
+                notified += 1
+                logger.info(
+                    f"SLA breached: {instance.reference_number} in "
+                    f"'{instance.current_state.name}' "
+                    f"({sla['elapsed_hours']}h / {sla['sla_hours']}h SLA)"
+                )
+            except (IntegrityError, OperationalError) as e:
+                logger.warning(
+                    f"Transient DB error processing SLA for instance {instance.id}: {e}. "
+                    f"Will retry."
+                )
+                continue
+
+        logger.info(
+            f"SLA check complete: checked {checked} open instances, "
+            f"{breached} breached, {notified} newly notified."
+        )
+    except (IntegrityError, OperationalError) as exc:
+        logger.warning(f"SLA scheduler encountered transient DB lock: {exc}. Retrying...")
+        raise self.retry(exc=exc)
+    except Exception as exc:
+        logger.error(f"SLA scheduler failed: {exc}", exc_info=True)
+        raise
