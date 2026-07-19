@@ -692,3 +692,22 @@ pre {
 }
 .hint:hover::after { opacity: 1; visibility: visible; }
 /* Tooltips open downward by default (card headers sit at card tops). */
+
+/* React Flow controls: theme-aware buttons (default ships white bg + unset
+   SVG fill, which renders as blank white squares on the dark canvas). */
+.react-flow__controls {
+  box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.4));
+}
+.react-flow__controls-button {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.react-flow__controls-button:hover {
+  background: var(--bg-elevated, var(--bg-surface));
+}
+.react-flow__controls-button svg {
+  fill: var(--text-primary);
+  max-width: 12px;
+  max-height: 12px;
+}
