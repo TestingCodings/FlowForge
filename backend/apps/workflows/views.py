@@ -277,6 +277,55 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{safe_name}-v{wf.version}.flowforge.json"'
         return response
 
+    @action(detail=False, methods=["post"], url_path="compose-yaml")
+    def compose_yaml(self, request):
+        """Create a workflow from DSL text (docs/BUILDER.md Part 3).
+
+        POST body: {"text": "<yaml dsl>"}. Pass ?dry_run=true to validate
+        and preview without saving — returns the parsed graph plus lint
+        warnings so editors can live-preview while typing.
+        """
+        from .dsl import DslError, lint_bundle, parse_dsl
+        from .portability import BundleError, import_workflow
+
+        require_min_role(request.user, "workflow_designer", action="create a workflow from YAML")
+        text = request.data.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return Response({"detail": ["'text' with the YAML document is required."]}, status=400)
+
+        try:
+            bundle = parse_dsl(text)
+        except DslError as exc:
+            return Response({"detail": exc.errors}, status=400)
+
+        lint = lint_bundle(bundle)
+        dry_run = str(request.query_params.get("dry_run", "")).lower() in {"1", "true", "yes"}
+        if dry_run:
+            name_taken = WorkflowDefinition.objects.filter(name=bundle["workflow"]["name"]).exists()
+            return Response({
+                "valid": True,
+                "bundle": bundle,
+                "lint": lint,
+                "name_taken": name_taken,
+            })
+
+        try:
+            wf = import_workflow(bundle, created_by=request.user)
+        except BundleError as exc:
+            return Response({"detail": [str(exc)]}, status=400)
+        data = WorkflowDefinitionSerializer(wf).data
+        data["lint"] = lint
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="export-yaml")
+    def export_yaml(self, request, pk=None):
+        """Render the workflow as DSL text for viewing/copying/re-import."""
+        from .dsl import export_dsl
+        from .portability import export_workflow
+
+        wf = self.get_object()
+        return Response({"text": export_dsl(export_workflow(wf))})
+
     @action(detail=False, methods=["post"], url_path="import")
     def import_bundle(self, request):
         """Create a workflow from a bundle. workflow_designer+.
