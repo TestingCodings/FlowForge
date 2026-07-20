@@ -7,16 +7,19 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  getNodesBounds,
+  getViewportForBounds,
   type Connection,
   type Node,
   type Edge,
 } from "@xyflow/react";
+import { toPng } from "html-to-image";
 import "@xyflow/react/dist/style.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../api/client";
 import {
-  layoutGraph, lintGraph, makeEdge, nodeTypes, type StateNodeData,
+  assignEdgeHandles, layoutGraph, lintGraph, makeEdge, nodeTypes, type StateNodeData,
 } from "../components/flowGraph";
 
 /* Builder-side form + rule models (ride along in node/edge data) */
@@ -162,6 +165,11 @@ export default function WorkflowBuilderPage() {
   // Live graph lint (mirrors backend dsl.lint_bundle)
   const lint = useMemo(() => lintGraph(nodes, edges), [nodes, edges]);
 
+  // Keep backward edges routed through near-side handles as nodes move
+  useEffect(() => {
+    setEdges((es) => assignEdgeHandles(nodes, es));
+  }, [nodes, setEdges]);
+
   // Undo/redo history (structural changes + node moves)
   const past = useRef<Snapshot[]>([]);
   const future = useRef<Snapshot[]>([]);
@@ -277,6 +285,33 @@ export default function WorkflowBuilderPage() {
   const autoLayout = () => {
     takeSnapshot();
     setNodes((ns) => layoutGraph(ns, edges));
+  };
+
+  const exportPng = async () => {
+    const viewport = document.querySelector(".react-flow__viewport") as HTMLElement | null;
+    if (!viewport || nodes.length === 0) return;
+    const bounds = getNodesBounds(nodes);
+    const width = Math.max(480, Math.round(bounds.width) + 120);
+    const height = Math.max(320, Math.round(bounds.height) + 120);
+    const vp = getViewportForBounds(bounds, width, height, 0.4, 2, 0.1);
+    const bg =
+      getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#0d1117";
+    const dataUrl = await toPng(viewport, {
+      backgroundColor: bg,
+      width,
+      height,
+      style: {
+        width: `${width}px`,
+        height: `${height}px`,
+        transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
+        transformOrigin: "top left",
+      },
+      pixelRatio: 2, // crisp 2x output
+    });
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${(wfName.trim() || "workflow").toLowerCase().replace(/[^a-z0-9-_]+/g, "-")}.png`;
+    a.click();
   };
 
   const updateNodeData = (field: keyof StateNodeData, value: unknown) => {
@@ -646,96 +681,107 @@ export default function WorkflowBuilderPage() {
   /* ─── Render ─── */
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", gap: 0 }}>
-      {/* Top bar */}
+      {/* Top bar: two flex groups that wrap as whole units on narrow widths,
+          with nowrap buttons so labels never break mid-word. */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 12, padding: "10px 16px",
+        display: "flex", alignItems: "center", gap: 10, rowGap: 8, padding: "10px 16px",
         background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
-        flexShrink: 0,
+        flexShrink: 0, flexWrap: "wrap",
       }}>
-        <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--accent-light)", marginRight: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--accent-light)", whiteSpace: "nowrap", marginRight: 4 }}>
           {isEdit ? "Edit Workflow" : "Workflow Builder"}
         </div>
         {isEdit && editLoading && (
           <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Loading…</span>
         )}
 
-        <input
-          placeholder="Workflow name *"
-          value={wfName}
-          onChange={(e) => setWfName(e.target.value)}
-          style={{ width: 220, padding: "6px 10px", fontSize: "0.85rem" }}
-        />
-        <input
-          placeholder="Description"
-          value={wfDesc}
-          onChange={(e) => setWfDesc(e.target.value)}
-          style={{ width: 200, padding: "6px 10px", fontSize: "0.85rem" }}
-        />
-        <input
-          placeholder="PREFIX"
-          value={wfPrefix}
-          onChange={(e) => setWfPrefix(e.target.value.toUpperCase().slice(0, 10))}
-          style={{ width: 90, padding: "6px 10px", fontSize: "0.85rem", fontFamily: "monospace" }}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 320px", minWidth: 0 }}>
+          <input
+            placeholder="Workflow name *"
+            value={wfName}
+            onChange={(e) => setWfName(e.target.value)}
+            style={{ flex: "1 1 140px", minWidth: 110, padding: "6px 10px", fontSize: "0.85rem" }}
+          />
+          <input
+            placeholder="Description"
+            value={wfDesc}
+            onChange={(e) => setWfDesc(e.target.value)}
+            style={{ flex: "1 1 120px", minWidth: 90, padding: "6px 10px", fontSize: "0.85rem" }}
+          />
+          <input
+            placeholder="PREFIX"
+            value={wfPrefix}
+            onChange={(e) => setWfPrefix(e.target.value.toUpperCase().slice(0, 10))}
+            style={{ width: 76, flexShrink: 0, padding: "6px 10px", fontSize: "0.85rem", fontFamily: "monospace" }}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={wfActive} onChange={(e) => setWfActive(e.target.checked)} style={{ width: "auto" }} />
+            Active
+          </label>
+        </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--text-secondary)", cursor: "pointer", marginLeft: 2 }}>
-          <input type="checkbox" checked={wfActive} onChange={(e) => setWfActive(e.target.checked)} style={{ width: "auto" }} />
-          Active
-        </label>
-
-        <div style={{ flex: 1 }} />
-
-        {!isEdit && (
-          <Link
-            to="/workflows/new/text"
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+          {!isEdit && (
+            <Link
+              to="/workflows/new/text"
+              className="btn-secondary btn-sm hint"
+              style={{ textDecoration: "none", whiteSpace: "nowrap" }}
+              data-hint="Write this workflow as YAML instead"
+            >
+              YAML
+            </Link>
+          )}
+          <button
             className="btn-secondary btn-sm hint"
-            style={{ textDecoration: "none" }}
-            data-hint="Write this workflow as YAML instead"
+            onClick={undo}
+            disabled={past.current.length === 0}
+            data-hint="Undo (Ctrl+Z)"
+            style={{ padding: "4px 10px" }}
           >
-            YAML editor
-          </Link>
-        )}
-        <button
-          className="btn-secondary btn-sm hint"
-          onClick={undo}
-          disabled={past.current.length === 0}
-          data-hint="Undo (Ctrl+Z)"
-          style={{ padding: "4px 10px" }}
-        >
-          ↩
-        </button>
-        <button
-          className="btn-secondary btn-sm hint"
-          onClick={redo}
-          disabled={future.current.length === 0}
-          data-hint="Redo (Ctrl+Shift+Z)"
-          style={{ padding: "4px 10px" }}
-        >
-          ↪
-        </button>
-        <button
-          className="btn-secondary btn-sm hint"
-          onClick={autoLayout}
-          data-hint="Arrange states left-to-right from the start state"
-        >
-          Auto-layout
-        </button>
-        <button className="btn-secondary btn-sm" onClick={addState}>
-          + Add State
-        </button>
-        {(selectedNodeId || selectedEdgeId) && (
-          <button className="btn-danger btn-sm" onClick={deleteSelected}>
-            Delete
+            ↩
           </button>
-        )}
-        <button
-          className="btn-primary btn-sm"
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          style={{ minWidth: 120 }}
-        >
-          {saveMutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Save Workflow"}
-        </button>
+          <button
+            className="btn-secondary btn-sm hint"
+            onClick={redo}
+            disabled={future.current.length === 0}
+            data-hint="Redo (Ctrl+Shift+Z)"
+            style={{ padding: "4px 10px" }}
+          >
+            ↪
+          </button>
+          <button
+            className="btn-secondary btn-sm hint"
+            onClick={autoLayout}
+            data-hint="Arrange states left-to-right from the start state"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            Auto-layout
+          </button>
+          <button
+            className="btn-secondary btn-sm hint"
+            onClick={exportPng}
+            data-hint="Download the canvas as a PNG image"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            ⤓ PNG
+          </button>
+          <button className="btn-secondary btn-sm" onClick={addState} style={{ whiteSpace: "nowrap" }}>
+            + Add State
+          </button>
+          {(selectedNodeId || selectedEdgeId) && (
+            <button className="btn-danger btn-sm" onClick={deleteSelected} style={{ whiteSpace: "nowrap" }}>
+              Delete
+            </button>
+          )}
+          <button
+            className="btn-primary btn-sm"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            style={{ minWidth: 110, whiteSpace: "nowrap" }}
+          >
+            {saveMutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Save Workflow"}
+          </button>
+        </div>
       </div>
 
       {/* Resume draft banner */}

@@ -32,6 +32,12 @@ export function StateNode({ data, selected }: NodeProps) {
       transition: "border-color 0.15s, background 0.15s",
     }}>
       <Handle type="target" position={Position.Left} style={{ background: "#6366f1", border: "2px solid #30363d", width: 10, height: 10 }} />
+      {/* Invisible endpoints so backward edges can leave/enter the near side
+          instead of sweeping around the whole graph. Not draggable. */}
+      <Handle type="source" id="src-l" position={Position.Left} isConnectable={false}
+        style={{ opacity: 0, pointerEvents: "none", width: 1, height: 1 }} />
+      <Handle type="target" id="tgt-r" position={Position.Right} isConnectable={false}
+        style={{ opacity: 0, pointerEvents: "none", width: 1, height: 1 }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         {d.isInitial && <span style={{ fontSize: 8, fontWeight: 700, background: "rgba(99,102,241,0.3)", color: "#818cf8", padding: "2px 5px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Start</span>}
@@ -85,6 +91,30 @@ export function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
     const pos = g.node(n.id);
     return { ...n, position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 } };
   });
+}
+
+/**
+ * Route backward edges (target left of source) through the near-side
+ * handles so they arc directly instead of sweeping around the graph.
+ * Returns the same array reference when nothing changed.
+ */
+export function assignEdgeHandles(nodes: Node[], edges: Edge[]): Edge[] {
+  const pos = new Map(nodes.map((n) => [n.id, n.position.x]));
+  let changed = false;
+  const next = edges.map((e) => {
+    const sx = pos.get(e.source);
+    const tx = pos.get(e.target);
+    if (sx === undefined || tx === undefined) return e;
+    const backward = tx + NODE_W / 2 < sx;
+    const sourceHandle = backward ? "src-l" : undefined;
+    const targetHandle = backward ? "tgt-r" : undefined;
+    if ((e.sourceHandle ?? undefined) === sourceHandle && (e.targetHandle ?? undefined) === targetHandle) {
+      return e;
+    }
+    changed = true;
+    return { ...e, sourceHandle, targetHandle };
+  });
+  return changed ? next : edges;
 }
 
 /**
@@ -154,5 +184,6 @@ export function graphFromBundle(bundle: any): { nodes: Node[]; edges: Edge[] } {
   const edges: Edge[] = transitions.map((t: any, i: number) =>
     makeEdge(`t${i}`, t.from_state, t.to_state, t.name, Boolean(t.requires_approval))
   );
-  return { nodes: layoutGraph(nodes, edges), edges };
+  const laidOut = layoutGraph(nodes, edges);
+  return { nodes: laidOut, edges: assignEdgeHandles(laidOut, edges) };
 }

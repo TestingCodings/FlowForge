@@ -1,5 +1,34 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { State, Transition } from "../types/api";
+
+/** Rasterise an inline SVG element to a downloaded PNG (2x scale). */
+export function downloadSvgAsPng(svg: SVGSVGElement, filename: string, background: string) {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = svg.width.baseVal.value * scale;
+    canvas.height = svg.height.baseVal.value * scale;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    canvas.toBlob((png) => {
+      if (!png) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(png);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, "image/png");
+  };
+  img.src = url;
+}
 
 interface Props {
   states: State[];
@@ -60,8 +89,13 @@ function assignLevels(states: State[], transitions: Transition[]): Map<string, n
 export default function StateGraph({
   states, transitions, currentStateId, visitedStateNames = [],
 }: Props) {
-  const { nodes, edges, svgW, svgH } = useMemo(() => {
-    if (!states.length) return { nodes: [], edges: [], svgW: 0, svgH: 0 };
+  const { nodes, edges, svgW, svgH, backEdgeIndex, graphBottom } = useMemo(() => {
+    if (!states.length) {
+      return {
+        nodes: [], edges: [], svgW: 0, svgH: 0,
+        backEdgeIndex: new Map<string, number>(), graphBottom: 0,
+      };
+    }
 
     const levelMap = assignLevels(states, transitions);
 
@@ -115,12 +149,22 @@ export default function StateGraph({
       fromState: State; toState: State;
     }>;
 
-    const maxX = Math.max(...nodeList.map(n => n.x)) + NODE_W + PAD;
-    const maxY = Math.max(...nodeList.map(n => n.y)) + NODE_H + PAD;
+    // Stagger back-edge arcs so multiple return paths don't overlap
+    let backIdx = 0;
+    const backEdgeIndex = new Map<string, number>();
+    for (const e of edgeList) {
+      if (e.to.x <= e.from.x) backEdgeIndex.set(e.id, backIdx++);
+    }
 
-    return { nodes: nodeList, edges: edgeList, svgW: maxX, svgH: maxY };
+    const maxX = Math.max(...nodeList.map(n => n.x)) + NODE_W + PAD;
+    const graphBottom = Math.max(...nodeList.map(n => n.y)) + NODE_H;
+    // Back-edge arcs route below the whole graph; leave room for them
+    const maxY = graphBottom + PAD + (backIdx > 0 ? backIdx * 18 + 26 : 0);
+
+    return { nodes: nodeList, edges: edgeList, svgW: maxX, svgH: maxY, backEdgeIndex, graphBottom };
   }, [states, transitions]);
 
+  const svgRef = useRef<SVGSVGElement>(null);
   const currentState = states.find(s => s.id === currentStateId);
 
   function stateStatus(state: State) {
@@ -135,12 +179,22 @@ export default function StateGraph({
   if (!states.length) return null;
 
   return (
-    <div className="state-graph-wrap">
+    <div className="state-graph-wrap" style={{ position: "relative" }}>
+      <button
+        className="btn-secondary btn-sm"
+        onClick={() => svgRef.current && downloadSvgAsPng(svgRef.current, "workflow.png", "#0d1117")}
+        title="Download this diagram as a PNG image"
+        style={{ position: "absolute", top: 6, right: 6, padding: "3px 9px", fontSize: "0.72rem", opacity: 0.85, whiteSpace: "nowrap" }}
+      >
+        ⤓ PNG
+      </button>
       <svg
+        ref={svgRef}
         width={svgW}
         height={svgH}
         viewBox={`0 0 ${svgW} ${svgH}`}
-        style={{ display: "block", minWidth: svgW }}
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: "block", minWidth: svgW, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}
       >
         <defs>
           <marker id="arr-active"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1" /></marker>
@@ -168,37 +222,41 @@ export default function StateGraph({
           const markerId  = edgeStatus === "completed" ? "arr-done" : edgeStatus === "active" ? "arr-active" : "arr-pending";
           const opacity   = edgeStatus === "pending" ? 0.35 : 1;
 
-          // Start from right-center of source, end at left-center of target
-          const x1 = e.from.x + NODE_W;
-          const y1 = e.from.y + NODE_H / 2;
-          const x2 = e.to.x;
-          const y2 = e.to.y + NODE_H / 2;
-
-          // Back-edge (right-to-left) or skip-level: use an arc that routes around
           const isBackEdge = e.to.x <= e.from.x;
-          const dy = Math.abs(y2 - y1);
-          const dx = Math.abs(x2 - x1);
 
           let d: string;
+          let lx: number;
+          let ly: number;
           if (isBackEdge) {
-            // Loop back: arc below the nodes
-            const midX = (x1 + x2) / 2;
-            const arcY = Math.max(e.from.y, e.to.y) + NODE_H + 28;
-            d = `M ${x1} ${y1} C ${x1 + 20} ${arcY}, ${x2 - 20} ${arcY}, ${x2} ${y2}`;
-          } else if (dy > 4) {
-            // Same or skipped level but different row: S-curve
-            const cpX = x1 + dx * 0.4;
-            d = `M ${x1} ${y1} C ${cpX} ${y1}, ${cpX} ${y2}, ${x2} ${y2}`;
+            // Return path: leave the source's BOTTOM, arc below the whole
+            // graph, and re-enter the target's BOTTOM. Keeps the arrow short
+            // and clear of every node instead of sweeping around the canvas.
+            const k = backEdgeIndex.get(e.id) ?? 0;
+            const x1 = e.from.x + NODE_W / 2;
+            const y1 = e.from.y + NODE_H;
+            const x2 = e.to.x + NODE_W / 2;
+            const y2 = e.to.y + NODE_H;
+            const arcY = graphBottom + 22 + k * 18;
+            d = `M ${x1} ${y1} C ${x1} ${arcY}, ${x2} ${arcY}, ${x2} ${y2 + 6}`;
+            lx = (x1 + x2) / 2;
+            ly = arcY + 1;
           } else {
-            // Straight horizontal
-            d = `M ${x1} ${y1} L ${x2 - 8} ${y2}`;
+            // Forward: right-center of source → left-center of target
+            const x1 = e.from.x + NODE_W;
+            const y1 = e.from.y + NODE_H / 2;
+            const x2 = e.to.x;
+            const y2 = e.to.y + NODE_H / 2;
+            const dy = Math.abs(y2 - y1);
+            const dx = Math.abs(x2 - x1);
+            if (dy > 4) {
+              const cpX = x1 + dx * 0.4;
+              d = `M ${x1} ${y1} C ${cpX} ${y1}, ${cpX} ${y2}, ${x2} ${y2}`;
+            } else {
+              d = `M ${x1} ${y1} L ${x2 - 8} ${y2}`;
+            }
+            lx = (x1 + x2) / 2;
+            ly = (y1 + y2) / 2 - 6;
           }
-
-          // Label position: midpoint of the bezier approximation
-          const lx = (x1 + x2) / 2;
-          const ly = isBackEdge
-            ? Math.max(e.from.y, e.to.y) + NODE_H + 42
-            : (y1 + y2) / 2 - 6;
 
           return (
             <g key={e.id}>
