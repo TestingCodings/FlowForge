@@ -15,6 +15,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import dagre from "@dagrejs/dagre";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../api/client";
@@ -112,6 +113,23 @@ function makeNode(id: string, position: { x: number; y: number }, isInitial = fa
       defaultRole: isInitial ? "participant" : "approver",
     } as StateNodeData,
   };
+}
+
+/* ─── Auto-layout: left-to-right rank layout via dagre ─── */
+const NODE_W = 170;
+const NODE_H = 64;
+
+function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 90, marginx: 40, marginy: 40 });
+  g.setDefaultEdgeLabel(() => ({}));
+  nodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
+  edges.forEach((e) => g.setEdge(e.source, e.target));
+  dagre.layout(g);
+  return nodes.map((n) => {
+    const pos = g.node(n.id);
+    return { ...n, position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 } };
+  });
 }
 
 /* ─── Edge factory (shared by connect dialog + hydration) ─── */
@@ -263,6 +281,42 @@ export default function WorkflowBuilderPage() {
     }
   };
 
+  const duplicateSelected = () => {
+    if (!selectedNode) return;
+    takeSnapshot();
+    const d = selectedNode.data as StateNodeData;
+    const id = String(nodeIdRef.current++);
+    setNodes((ns) => [...ns, {
+      ...selectedNode,
+      id,
+      position: { x: selectedNode.position.x + 30, y: selectedNode.position.y + 40 },
+      selected: false,
+      data: {
+        ...d,
+        label: `${d.label} (copy)`,
+        isInitial: false, // only one start state allowed
+        serverId: undefined, // a copy is a new state
+      },
+    }]);
+    setSelectedNodeId(id);
+  };
+
+  const nudgeSelected = (dx: number, dy: number) => {
+    if (!selectedNodeId) return;
+    setNodes((ns) =>
+      ns.map((n) =>
+        n.id === selectedNodeId
+          ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } }
+          : n
+      )
+    );
+  };
+
+  const autoLayout = () => {
+    takeSnapshot();
+    setNodes((ns) => layoutGraph(ns, edges));
+  };
+
   const updateNodeData = (field: keyof StateNodeData, value: unknown) => {
     if (!selectedNodeId) return;
     setNodes((ns) =>
@@ -383,7 +437,10 @@ export default function WorkflowBuilderPage() {
     const states = [...(editWf.states ?? [])].sort(
       (a: any, b: any) => a.position_order - b.position_order
     );
-    const hydratedNodes: Node[] = states.map((s: any, i: number) => ({
+    const hasPositions = states.some(
+      (s: any) => s.canvas_position && typeof s.canvas_position.x === "number"
+    );
+    let hydratedNodes: Node[] = states.map((s: any, i: number) => ({
       id: String(s.id),
       type: "stateNode",
       position:
@@ -406,6 +463,11 @@ export default function WorkflowBuilderPage() {
         t.name, Boolean(t.requires_approval), String(t.id),
       )
     );
+    // Workflows never opened in the builder have no stored positions —
+    // rank-layout them instead of the naive grid.
+    if (!hasPositions) {
+      hydratedNodes = layoutGraph(hydratedNodes, hydratedEdges);
+    }
     // Edges land one frame after nodes: xyflow drops edges applied in the
     // same commit that replaces all nodes (skipped before measurement).
     // hydratedRef flips inside the timer so a StrictMode double-invoke
@@ -467,9 +529,19 @@ export default function WorkflowBuilderPage() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateSelected();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelected();
+      } else if (e.key.startsWith("Arrow") && selectedNodeId) {
+        e.preventDefault();
+        const step = e.shiftKey ? 24 : 8;
+        if (e.key === "ArrowLeft") nudgeSelected(-step, 0);
+        else if (e.key === "ArrowRight") nudgeSelected(step, 0);
+        else if (e.key === "ArrowUp") nudgeSelected(0, -step);
+        else if (e.key === "ArrowDown") nudgeSelected(0, step);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -611,6 +683,13 @@ export default function WorkflowBuilderPage() {
         >
           ↪
         </button>
+        <button
+          className="btn-secondary btn-sm hint"
+          onClick={autoLayout}
+          data-hint="Arrange states left-to-right from the start state"
+        >
+          Auto-layout
+        </button>
         <button className="btn-secondary btn-sm" onClick={addState}>
           + Add State
         </button>
@@ -694,6 +773,8 @@ export default function WorkflowBuilderPage() {
             fitView
             fitViewOptions={{ padding: 0.3 }}
             deleteKeyCode={null}
+            snapToGrid
+            snapGrid={[12, 12]}
             style={{ background: "var(--bg-base)" }}
           >
             <Background color="#21262d" gap={24} size={1} />
