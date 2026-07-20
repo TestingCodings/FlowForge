@@ -160,6 +160,21 @@ export default function WorkflowDetailPage() {
     URL.revokeObjectURL(url);
   };
 
+  /* ─── View as YAML ─── */
+  const [yamlText, setYamlText] = useState<string | null>(null);
+  const [yamlCopied, setYamlCopied] = useState(false);
+  const viewYaml = async () => {
+    const resp = await apiClient.get(`/workflows/${id}/export-yaml/`);
+    setYamlText(resp.data.text);
+    setYamlCopied(false);
+  };
+  const copyYaml = async () => {
+    if (yamlText) {
+      await navigator.clipboard.writeText(yamlText);
+      setYamlCopied(true);
+    }
+  };
+
   /* ─── State forms ─── */
   const { data: stateForms = [] } = useQuery<FormDefinitionApi[]>({
     queryKey: ["stateForms", id],
@@ -270,6 +285,13 @@ export default function WorkflowDetailPage() {
             title="Download this workflow as a portable .flowforge.json bundle"
           >
             Export
+          </button>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={viewYaml}
+            title="View this workflow as YAML text (copy, tweak, re-import)"
+          >
+            View as YAML
           </button>
           <button
             className="btn-secondary btn-sm"
@@ -850,6 +872,51 @@ export default function WorkflowDetailPage() {
       )}
       {versionMsg && versionHistory.length <= 1 && (
         <div className="alert alert-success mt-3">{versionMsg}</div>
+      )}
+
+      {/* View as YAML modal */}
+      {yamlText !== null && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
+          }}
+          onClick={() => setYamlText(null)}
+        >
+          <div
+            style={{
+              background: "var(--bg-surface)", border: "1px solid var(--border)",
+              borderRadius: 14, padding: 20, width: "min(680px, 92vw)",
+              maxHeight: "80vh", display: "flex", flexDirection: "column", gap: 12,
+              boxShadow: "var(--shadow-lg)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h3 style={{ fontSize: "1rem", margin: 0, flex: 1 }}>{wf.name} as YAML</h3>
+              <button className="btn-secondary btn-sm" onClick={copyYaml}>
+                {yamlCopied ? "Copied ✓" : "Copy"}
+              </button>
+              <button className="btn-secondary btn-sm" onClick={() => setYamlText(null)}>Close</button>
+            </div>
+            <textarea
+              readOnly
+              value={yamlText}
+              spellCheck={false}
+              style={{
+                flex: 1, minHeight: 320, resize: "none",
+                background: "var(--bg-base)", color: "var(--text-primary)",
+                border: "1px solid var(--border)", borderRadius: 8, padding: 12,
+                fontFamily: "ui-monospace, 'Cascadia Code', Consolas, monospace",
+                fontSize: "0.8rem", lineHeight: 1.6,
+              }}
+            />
+            <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", margin: 0 }}>
+              Paste this into the YAML editor (Workflows → New → YAML editor) with a new
+              name to create a copy, or keep it in git for review and versioning.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

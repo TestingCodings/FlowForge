@@ -9,6 +9,7 @@ import InstancesPage from "./pages/InstancesPage";
 import LoginPage from "./pages/LoginPage";
 import NewWorkflowPage from "./pages/NewWorkflowPage";
 import WorkflowBuilderPage from "./pages/WorkflowBuilderPage";
+import WorkflowYamlPage from "./pages/WorkflowYamlPage";
 import RegisterPage from "./pages/RegisterPage";
 import UsersPage from "./pages/UsersPage";
 import HelpPage from "./pages/HelpPage";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="workflows" element={<WorkflowsPage />} />
         <Route path="workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="workflows/new/text" element={<WorkflowYamlPage />} />
         <Route path="workflows/:id/edit" element={<WorkflowBuilderPage />} />
         <Route path="workflows/templates" element={<NewWorkflowPage />} />
         <Route path="workflows/:id" element={<WorkflowDetailPage />} />
