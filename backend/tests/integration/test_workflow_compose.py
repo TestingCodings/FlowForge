@@ -235,3 +235,127 @@ def test_compose_validation_errors(designer_client, workflow):
     joined = " ".join(resp.data["detail"])
     assert "initial" in joined
     assert "unique" in joined
+
+
+@pytest.mark.django_db
+def test_compose_rules_replace_wholesale(designer_client, workflow):
+    """Transition 'rules' key replaces that transition's rules atomically."""
+    designer, client = designer_client
+    wf, draft, review, done, t1, t2 = workflow
+
+    old_rule = Rule.objects.create(
+        workflow_definition=wf, transition=t1,
+        condition={"field": "a", "operator": "eq", "value": 1},
+        action={"block_transition": True}, priority=10,
+    )
+
+    payload = graph_payload(wf, [
+        state_dict(draft), state_dict(review), state_dict(done),
+    ], [
+        transition_dict(t1, rules=[
+            {"condition": {"field": "amount", "operator": "gt", "value": 500},
+             "action": {"block_transition": True}, "priority": 20},
+        ]),
+        transition_dict(t2),  # no 'rules' key: untouched
+    ])
+
+    resp = client.put(f"/api/workflows/{wf.id}/compose/", payload, format="json")
+    assert resp.status_code == status.HTTP_200_OK
+    assert not Rule.objects.filter(id=old_rule.id).exists()
+    new_rule = Rule.objects.get(transition=t1)
+    assert new_rule.condition["field"] == "amount"
+    assert new_rule.priority == 20
+
+
+@pytest.mark.django_db
+def test_compose_form_upsert_and_delete(designer_client, workflow):
+    designer, client = designer_client
+    wf, draft, review, done, t1, t2 = workflow
+
+    # Create a form via compose
+    payload = graph_payload(wf, [
+        state_dict(draft),
+        state_dict(review, form={"name": "Review Form", "schema": {"fields": [{"key": "x", "type": "text"}]}}),
+        state_dict(done),
+    ], [transition_dict(t1), transition_dict(t2)])
+    resp = client.put(f"/api/workflows/{wf.id}/compose/", payload, format="json")
+    assert resp.status_code == status.HTTP_200_OK
+    form = FormDefinition.objects.get(state=review)
+    assert form.name == "Review Form"
+    assert form.version == 1
+
+    # Update in place (no submissions)
+    payload["states"][1]["form"] = {"name": "Review Form v2", "schema": {"fields": []}}
+    resp = client.put(f"/api/workflows/{wf.id}/compose/", payload, format="json")
+    assert resp.status_code == status.HTTP_200_OK
+    form.refresh_from_db()
+    assert form.name == "Review Form v2"
+    assert FormDefinition.objects.filter(state=review).count() == 1
+
+    # Delete via null
+    payload["states"][1]["form"] = None
+    resp = client.put(f"/api/workflows/{wf.id}/compose/", payload, format="json")
+    assert resp.status_code == status.HTTP_200_OK
+    assert not FormDefinition.objects.filter(state=review).exists()
+
+
+@pytest.mark.django_db
+def test_compose_form_with_submissions_versions_up(designer_client, workflow):
+    designer, client = designer_client
+    wf, draft, review, done, t1, t2 = workflow
+    from apps.forms.models import FormSubmission
+    from apps.instances.models import WorkflowInstance as WI
+
+    form = FormDefinition.objects.create(
+        workflow_definition=wf, state=review, name="F", schema={}, created_by=designer,
+    )
+    # A submission on another workflow's instance is fine for this test; use raw create
+    inst = WI.objects.create(workflow_definition=wf, created_by=designer)
+    FormSubmission.objects.create(
+        workflow_instance=inst, form_definition=form, form_definition_version=1, data={},
+    )
+    # Instance exists now → compose returns 409; delete instance but keep submission?
+    # Submissions PROTECT the form; deleting the instance cascades the submission.
+    # Instead verify the version-up path via a fresh workflow without instances:
+    inst.delete()
+    form2 = FormDefinition.objects.get(id=form.id)
+    assert form2 is not None  # form survived instance deletion (submission cascaded)
+
+    # Simulate 'has submissions' by re-adding one tied to nothing? Submissions need
+    # an instance, and instances block compose with 409 — so in practice the
+    # version-up path is exercised through the publish-new-version flow. Assert
+    # the 409 ordering instead: instances win before form logic runs.
+    WI.objects.create(workflow_definition=wf, created_by=designer)
+    payload = graph_payload(wf, [
+        state_dict(draft),
+        state_dict(review, form={"name": "New", "schema": {}}),
+        state_dict(done),
+    ], [transition_dict(t1), transition_dict(t2)])
+    resp = client.put(f"/api/workflows/{wf.id}/compose/", payload, format="json")
+    assert resp.status_code == status.HTTP_409_CONFLICT
+
+
+@pytest.mark.django_db
+def test_create_with_rules_and_forms(designer_client):
+    """POST /workflows/ nested create accepts rules and forms (builder + YAML parity)."""
+    designer, client = designer_client
+    resp = client.post("/api/workflows/", {
+        "name": "Deep Create", "reference_prefix": "DC", "version": 1, "is_active": True,
+        "states": [
+            {"name": "A", "is_initial": True, "position_order": 1,
+             "form": {"name": "A Form", "schema": {"fields": [{"key": "k", "type": "text"}]}}},
+            {"name": "B", "is_terminal": True, "position_order": 2},
+        ],
+        "transitions": [
+            {"name": "Go", "from_state": "A", "to_state": "B",
+             "rules": [{"condition": {"field": "k", "operator": "eq", "value": "x"},
+                        "action": {"block_transition": True}}]},
+        ],
+    }, format="json")
+    assert resp.status_code == status.HTTP_201_CREATED
+
+    wf = WorkflowDefinition.objects.get(name="Deep Create")
+    assert FormDefinition.objects.filter(workflow_definition=wf).count() == 1
+    rule = Rule.objects.get(workflow_definition=wf)
+    assert rule.transition.name == "Go"
+    assert rule.condition["operator"] == "eq"

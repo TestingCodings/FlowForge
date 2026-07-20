@@ -123,6 +123,8 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        from apps.forms.models import FormDefinition
+
         state_data = validated_data.pop("states", [])
         transition_data = validated_data.pop("transitions", [])
 
@@ -146,8 +148,19 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
             )
             state_map[state.name] = state
 
+            form_spec = state_payload.get("form")
+            if form_spec:
+                FormDefinition.objects.create(
+                    workflow_definition=workflow_definition,
+                    state=state,
+                    name=str(form_spec.get("name", f"{state.name} Form")),
+                    schema=form_spec.get("schema") or {},
+                    version=1,
+                    created_by=self.context["request"].user,
+                )
+
         for transition_payload in transition_data:
-            Transition.objects.create(
+            transition = Transition.objects.create(
                 workflow_definition=workflow_definition,
                 from_state=state_map[transition_payload["from_state"]],
                 to_state=state_map[transition_payload["to_state"]],
@@ -155,5 +168,13 @@ class WorkflowDefinitionCreateSerializer(serializers.ModelSerializer):
                 display_name=transition_payload.get("display_name", ""),
                 requires_approval=transition_payload.get("requires_approval", False),
             )
+            for rule_payload in transition_payload.get("rules") or []:
+                Rule.objects.create(
+                    workflow_definition=workflow_definition,
+                    transition=transition,
+                    condition=rule_payload.get("condition") or {},
+                    action=rule_payload.get("action") or {},
+                    priority=int(rule_payload.get("priority", 100)),
+                )
 
         return workflow_definition

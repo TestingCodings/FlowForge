@@ -87,6 +87,53 @@ export function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
   });
 }
 
+/**
+ * Client-side graph lint, mirroring backend dsl.lint_bundle so the visual
+ * builder and the YAML editor warn about the same problems.
+ */
+export function lintGraph(nodes: Node[], edges: Edge[]): string[] {
+  const warnings: string[] = [];
+  const label = (n: Node) => ((n.data as StateNodeData).label || "Unnamed").trim();
+  const outgoing = new Map<string, string[]>(nodes.map((n) => [n.id, []]));
+  for (const e of edges) outgoing.get(e.source)?.push(e.target);
+
+  const initial = nodes.find((n) => (n.data as StateNodeData).isInitial);
+  if (initial) {
+    const seen = new Set<string>();
+    const stack = [initial.id];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      stack.push(...(outgoing.get(cur) ?? []));
+    }
+    for (const n of nodes) {
+      if (!seen.has(n.id)) warnings.push(`'${label(n)}' is unreachable from the start state`);
+    }
+  }
+
+  for (const n of nodes) {
+    const d = n.data as StateNodeData;
+    const outs = outgoing.get(n.id) ?? [];
+    if (d.isTerminal && outs.length) warnings.push(`terminal state '${label(n)}' has outgoing transitions`);
+    if (!d.isTerminal && !outs.length) warnings.push(`'${label(n)}' is a dead end (non-terminal with no way out)`);
+    if (d.isTerminal && d.slaHours > 0) warnings.push(`terminal state '${label(n)}' has an SLA (it will never be met or breached)`);
+  }
+
+  if (nodes.length && !nodes.some((n) => (n.data as StateNodeData).isTerminal)) {
+    warnings.push("no terminal state — instances can never complete");
+  }
+
+  const pairSeen = new Set<string>();
+  for (const e of edges) {
+    const key = `${e.source}→${e.target}`;
+    if (pairSeen.has(key)) warnings.push(`multiple transitions between the same two states`);
+    pairSeen.add(key);
+  }
+
+  return warnings;
+}
+
 /** Build preview nodes/edges from a parsed DSL bundle (dry-run response). */
 export function graphFromBundle(bundle: any): { nodes: Node[]; edges: Edge[] } {
   const states = bundle?.states ?? [];

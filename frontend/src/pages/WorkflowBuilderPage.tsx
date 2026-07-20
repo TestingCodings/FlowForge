@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -16,8 +16,45 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../api/client";
 import {
-  layoutGraph, makeEdge, nodeTypes, type StateNodeData,
+  layoutGraph, lintGraph, makeEdge, nodeTypes, type StateNodeData,
 } from "../components/flowGraph";
+
+/* Builder-side form + rule models (ride along in node/edge data) */
+export interface BuilderFormField {
+  name: string;
+  type: string;
+  required: boolean;
+}
+export interface BuilderForm {
+  name: string;
+  required: boolean; // required_to_transition
+  fields: BuilderFormField[];
+}
+export interface BuilderRule {
+  condition: any;
+  action: any;
+  priority: number;
+}
+
+const RULE_OPERATORS = [
+  "eq", "ne", "gt", "gte", "lt", "lte", "contains", "starts_with", "is_true", "is_false",
+] as const;
+const FIELD_TYPES = ["text", "textarea", "number", "checkbox", "dropdown", "date"] as const;
+
+function isSimpleRule(r: BuilderRule): boolean {
+  return Boolean(
+    r.condition && typeof r.condition === "object" &&
+    typeof r.condition.field === "string" &&
+    RULE_OPERATORS.includes(r.condition.operator)
+  );
+}
+
+function coerceRuleValue(raw: string): string | number | boolean {
+  if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return Number(raw);
+  if (raw.trim() === "true") return true;
+  if (raw.trim() === "false") return false;
+  return raw;
+}
 
 /* ─── Draft persistence + undo history ─── */
 const DRAFT_KEY = "flowforge:builder-draft";
@@ -107,12 +144,23 @@ export default function WorkflowBuilderPage() {
   // 409 from compose: workflow has instances, offer publish-new-version flow
   const [conflict, setConflict] = useState<string | null>(null);
 
-  // Load the workflow being edited
+  // Load the workflow being edited (+ its per-state forms)
   const { data: editWf, isLoading: editLoading } = useQuery({
     queryKey: ["workflow", editId],
     queryFn: async () => (await apiClient.get(`/workflows/${editId}/`)).data,
     enabled: isEdit,
   });
+  const { data: editForms } = useQuery({
+    queryKey: ["builderForms", editId],
+    queryFn: async () => {
+      const d = (await apiClient.get(`/forms/?workflow_definition=${editId}`)).data;
+      return d.results ?? d;
+    },
+    enabled: isEdit,
+  });
+
+  // Live graph lint (mirrors backend dsl.lint_bundle)
+  const lint = useMemo(() => lintGraph(nodes, edges), [nodes, edges]);
 
   // Undo/redo history (structural changes + node moves)
   const past = useRef<Snapshot[]>([]);
@@ -263,6 +311,15 @@ export default function WorkflowBuilderPage() {
     );
   };
 
+  const updateEdgeRules = (rules: BuilderRule[]) => {
+    if (!selectedEdgeId) return;
+    setEdges((es) =>
+      es.map((e) =>
+        e.id === selectedEdgeId ? { ...e, data: { ...e.data, rules } } : e
+      )
+    );
+  };
+
   const toggleEdgeApproval = () => {
     if (!selectedEdgeId) return;
     setEdges((es) =>
@@ -298,7 +355,7 @@ export default function WorkflowBuilderPage() {
 
   const buildPayload = () => {
     const statePayloads = nodes.map((n, i) => {
-      const d = n.data as StateNodeData;
+      const d = n.data as StateNodeData & { form?: BuilderForm | null };
       return {
         ...(d.serverId ? { id: d.serverId } : {}),
         name: d.label.trim(),
@@ -312,6 +369,20 @@ export default function WorkflowBuilderPage() {
           default_role: d.defaultRole || "participant",
         },
         canvas_position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        // Only mention 'form' when known — absent means "leave alone" on compose
+        ...(d.form !== undefined
+          ? {
+              form: d.form
+                ? {
+                    name: d.form.name.trim() || `${d.label.trim()} Form`,
+                    schema: {
+                      required_to_transition: d.form.required,
+                      fields: d.form.fields.filter((f) => f.name.trim()),
+                    },
+                  }
+                : null,
+            }
+          : {}),
       };
     });
 
@@ -319,12 +390,16 @@ export default function WorkflowBuilderPage() {
       const fromNode = nodes.find((n) => n.id === e.source);
       const toNode   = nodes.find((n) => n.id === e.target);
       const serverId = (e.data as any)?.serverId;
+      const rules: BuilderRule[] | undefined = (e.data as any)?.rules;
       return {
         ...(serverId ? { id: serverId } : {}),
         name: ((e.data as any)?.name || e.label || "Transition") as string,
         from_state: ((fromNode?.data as StateNodeData)?.label ?? "").trim(),
         to_state:   ((toNode?.data as StateNodeData)?.label ?? "").trim(),
         requires_approval: Boolean((e.data as any)?.requiresApproval),
+        ...(rules !== undefined
+          ? { rules: rules.map((r) => ({ condition: r.condition, action: r.action, priority: r.priority })) }
+          : {}),
       };
     });
 
@@ -341,7 +416,7 @@ export default function WorkflowBuilderPage() {
 
   /* ─── Hydrate canvas from an existing workflow (edit mode) ─── */
   useEffect(() => {
-    if (!isEdit || !editWf || hydratedRef.current) return;
+    if (!isEdit || !editWf || !editForms || hydratedRef.current) return;
 
     setWfName(editWf.name ?? "");
     setWfDesc(editWf.description ?? "");
@@ -354,29 +429,60 @@ export default function WorkflowBuilderPage() {
     const hasPositions = states.some(
       (s: any) => s.canvas_position && typeof s.canvas_position.x === "number"
     );
-    let hydratedNodes: Node[] = states.map((s: any, i: number) => ({
-      id: String(s.id),
-      type: "stateNode",
-      position:
-        s.canvas_position && typeof s.canvas_position.x === "number"
-          ? { x: s.canvas_position.x, y: s.canvas_position.y }
-          : { x: 80 + (i % 4) * 220, y: 80 + Math.floor(i / 4) * 140 },
-      data: {
-        label: s.name,
-        isInitial: Boolean(s.is_initial),
-        isTerminal: Boolean(s.is_terminal),
-        slaHours: Number(s.sla_config?.sla_hours ?? 0),
-        requiresTask: Boolean(s.task_config?.requires_task ?? true),
-        defaultRole: s.task_config?.default_role ?? "participant",
-        serverId: String(s.id),
-      } as StateNodeData,
-    }));
-    const hydratedEdges: Edge[] = (editWf.transitions ?? []).map((t: any) =>
-      makeEdge(
+    // Latest form version per state (compose edits it in place / versions up)
+    const formByState = new Map<string, any>();
+    for (const f of editForms as any[]) {
+      const cur = formByState.get(f.state);
+      if (!cur || f.version > cur.version) formByState.set(f.state, f);
+    }
+
+    let hydratedNodes: Node[] = states.map((s: any, i: number) => {
+      const f = formByState.get(s.id);
+      const form: BuilderForm | null = f
+        ? {
+            name: f.name,
+            required: Boolean(f.schema?.required_to_transition),
+            fields: (f.schema?.fields ?? []).map((ff: any) => ({
+              name: ff.name ?? "",
+              type: ff.type ?? "text",
+              required: Boolean(ff.required),
+            })),
+          }
+        : null;
+      return {
+        id: String(s.id),
+        type: "stateNode",
+        position:
+          s.canvas_position && typeof s.canvas_position.x === "number"
+            ? { x: s.canvas_position.x, y: s.canvas_position.y }
+            : { x: 80 + (i % 4) * 220, y: 80 + Math.floor(i / 4) * 140 },
+        data: {
+          label: s.name,
+          isInitial: Boolean(s.is_initial),
+          isTerminal: Boolean(s.is_terminal),
+          slaHours: Number(s.sla_config?.sla_hours ?? 0),
+          requiresTask: Boolean(s.task_config?.requires_task ?? true),
+          defaultRole: s.task_config?.default_role ?? "participant",
+          serverId: String(s.id),
+          form,
+        } as StateNodeData & { form: BuilderForm | null },
+      };
+    });
+    const rulesByTransition = new Map<string, BuilderRule[]>();
+    for (const r of editWf.rules ?? []) {
+      if (!r.transition) continue; // workflow-scoped rules aren't edge-editable
+      const list = rulesByTransition.get(String(r.transition)) ?? [];
+      list.push({ condition: r.condition, action: r.action, priority: r.priority });
+      rulesByTransition.set(String(r.transition), list);
+    }
+    const hydratedEdges: Edge[] = (editWf.transitions ?? []).map((t: any) => {
+      const e = makeEdge(
         String(t.id), String(t.from_state), String(t.to_state),
         t.name, Boolean(t.requires_approval), String(t.id),
-      )
-    );
+      );
+      (e.data as any).rules = rulesByTransition.get(String(t.id)) ?? [];
+      return e;
+    });
     // Workflows never opened in the builder have no stored positions —
     // rank-layout them instead of the naive grid.
     if (!hasPositions) {
@@ -392,7 +498,7 @@ export default function WorkflowBuilderPage() {
       setEdges(hydratedEdges);
     }, 50);
     return () => clearTimeout(t);
-  }, [isEdit, editWf, setNodes, setEdges]);
+  }, [isEdit, editWf, editForms, setNodes, setEdges]);
 
   /* ─── Draft persistence (debounced autosave to localStorage; create mode only) ─── */
   useEffect(() => {
@@ -730,9 +836,27 @@ export default function WorkflowBuilderPage() {
               edge={selectedEdge}
               onUpdateName={updateEdgeLabel}
               onToggleApproval={toggleEdgeApproval}
+              onUpdateRules={updateEdgeRules}
             />
           ) : (
             <CanvasHelp nodesCount={nodes.length} edgesCount={edges.length} />
+          )}
+
+          {/* Live lint warnings */}
+          {lint.length > 0 && (
+            <div style={{
+              borderTop: "1px solid var(--border)", paddingTop: 12,
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#d29922" }}>
+                ⚠ {lint.length} warning{lint.length > 1 ? "s" : ""}
+              </div>
+              {lint.map((w, i) => (
+                <div key={i} style={{ fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                  {w}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -776,6 +900,7 @@ export default function WorkflowBuilderPage() {
 /* ─── Node properties panel ─── */
 function NodeEditor({ node, onUpdate }: { node: Node; onUpdate: (f: keyof StateNodeData, v: unknown) => void }) {
   const d = node.data as StateNodeData;
+  const form = (node.data as any).form as BuilderForm | null | undefined;
   return (
     <div>
       <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-secondary)", marginBottom: 12 }}>
@@ -829,6 +954,9 @@ function NodeEditor({ node, onUpdate }: { node: Node; onUpdate: (f: keyof StateN
         </>
       )}
 
+      <div className="divider" />
+      <FormSection form={form} onChange={(f) => onUpdate("form" as any, f)} stateLabel={d.label} />
+
       <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--bg-elevated)", borderRadius: 8, fontSize: "0.78rem", color: "var(--text-secondary)" }}>
         Drag from the <strong style={{ color: "var(--accent-light)" }}>right handle →</strong> to another state's left handle to create a transition.
       </div>
@@ -836,13 +964,105 @@ function NodeEditor({ node, onUpdate }: { node: Node; onUpdate: (f: keyof StateN
   );
 }
 
+/* ─── Per-state form editor ─── */
+function FormSection({ form, onChange, stateLabel }: {
+  form: BuilderForm | null | undefined;
+  onChange: (f: BuilderForm | null) => void;
+  stateLabel: string;
+}) {
+  const attach = () =>
+    onChange({ name: `${stateLabel} Form`, required: true, fields: [{ name: "", type: "text", required: false }] });
+
+  const patch = (p: Partial<BuilderForm>) => form && onChange({ ...form, ...p });
+  const patchField = (i: number, p: Partial<BuilderFormField>) =>
+    form && patch({ fields: form.fields.map((f, j) => (j === i ? { ...f, ...p } : f)) });
+
+  return (
+    <div>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "var(--text-primary)", fontSize: "0.85rem", marginBottom: 8 }}>
+        <input
+          type="checkbox"
+          checked={Boolean(form)}
+          onChange={(e) => (e.target.checked ? attach() : onChange(null))}
+          style={{ width: "auto" }}
+        />
+        Form on this state
+      </label>
+
+      {form && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input
+            placeholder="Form name"
+            value={form.name}
+            onChange={(e) => patch({ name: e.target.value })}
+            style={{ fontSize: "0.82rem", padding: "5px 8px" }}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+            <input
+              type="checkbox"
+              checked={form.required}
+              onChange={(e) => patch({ required: e.target.checked })}
+              style={{ width: "auto" }}
+            />
+            Must be completed before transition
+          </label>
+
+          {form.fields.map((f, i) => (
+            <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <input
+                placeholder="field_name"
+                value={f.name}
+                onChange={(e) => patchField(i, { name: e.target.value })}
+                style={{ flex: 1, minWidth: 0, fontSize: "0.78rem", padding: "4px 6px", fontFamily: "monospace" }}
+              />
+              <select
+                value={f.type}
+                onChange={(e) => patchField(i, { type: e.target.value })}
+                style={{ width: 84, fontSize: "0.78rem", padding: "4px 4px" }}
+              >
+                {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <input
+                type="checkbox"
+                title="Required"
+                checked={f.required}
+                onChange={(e) => patchField(i, { required: e.target.checked })}
+                style={{ width: "auto" }}
+              />
+              <button
+                className="btn-secondary btn-sm"
+                style={{ padding: "2px 7px", color: "var(--danger, #f85149)" }}
+                onClick={() => patch({ fields: form.fields.filter((_, j) => j !== i) })}
+              >✕</button>
+            </div>
+          ))}
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => patch({ fields: [...form.fields, { name: "", type: "text", required: false }] })}
+          >
+            + Add field
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Edge properties panel ─── */
-function EdgeEditor({ edge, onUpdateName, onToggleApproval }: {
+function EdgeEditor({ edge, onUpdateName, onToggleApproval, onUpdateRules }: {
   edge: Edge;
   onUpdateName: (n: string) => void;
   onToggleApproval: () => void;
+  onUpdateRules: (rules: BuilderRule[]) => void;
 }) {
   const requiresApproval = Boolean((edge.data as any)?.requiresApproval);
+  const rules: BuilderRule[] = (edge.data as any)?.rules ?? [];
+
+  const patchRule = (i: number, p: Partial<BuilderRule>) =>
+    onUpdateRules(rules.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  const patchCondition = (i: number, p: Record<string, unknown>) =>
+    patchRule(i, { condition: { ...rules[i].condition, ...p } });
+
   return (
     <div>
       <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-secondary)", marginBottom: 12 }}>
@@ -861,8 +1081,82 @@ function EdgeEditor({ edge, onUpdateName, onToggleApproval }: {
         Requires approval
         {requiresApproval && <span className="badge badge-pending" style={{ fontSize: "0.65rem" }}>APPROVAL</span>}
       </label>
+
+      <div className="divider" />
+
+      {/* Rules */}
+      <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-secondary)", marginBottom: 8 }}>
+        Rules ({rules.length})
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {rules.map((r, i) => (
+          <div key={i} style={{ padding: "8px 10px", background: "var(--bg-elevated)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+            {isSimpleRule(r) ? (
+              <>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    placeholder="field"
+                    value={r.condition.field}
+                    onChange={(e) => patchCondition(i, { field: e.target.value })}
+                    style={{ flex: 1, minWidth: 0, fontSize: "0.78rem", padding: "4px 6px", fontFamily: "monospace" }}
+                  />
+                  <select
+                    value={r.condition.operator}
+                    onChange={(e) => patchCondition(i, { operator: e.target.value })}
+                    style={{ width: 96, fontSize: "0.78rem", padding: "4px 4px" }}
+                  >
+                    {RULE_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
+                  </select>
+                </div>
+                {!["is_true", "is_false"].includes(r.condition.operator) && (
+                  <input
+                    placeholder="value"
+                    value={String(r.condition.value ?? "")}
+                    onChange={(e) => patchCondition(i, { value: coerceRuleValue(e.target.value) })}
+                    style={{ fontSize: "0.78rem", padding: "4px 6px", fontFamily: "monospace" }}
+                  />
+                )}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text-secondary)", fontSize: "0.78rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(r.action?.block_transition)}
+                    onChange={(e) => patchRule(i, { action: { ...r.action, block_transition: e.target.checked } })}
+                    style={{ width: "auto" }}
+                  />
+                  Block this transition when matched
+                </label>
+              </>
+            ) : (
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontFamily: "monospace", wordBreak: "break-all" }}>
+                (advanced rule — edit via YAML) {JSON.stringify(r.condition).slice(0, 80)}
+              </div>
+            )}
+            <button
+              className="btn-secondary btn-sm"
+              style={{ alignSelf: "flex-end", padding: "2px 8px", color: "var(--danger, #f85149)" }}
+              onClick={() => onUpdateRules(rules.filter((_, j) => j !== i))}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          className="btn-secondary btn-sm"
+          onClick={() =>
+            onUpdateRules([...rules, {
+              condition: { field: "", operator: "eq", value: "" },
+              action: { block_transition: true },
+              priority: 100,
+            }])
+          }
+        >
+          + Add rule
+        </button>
+      </div>
+
       <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--bg-elevated)", borderRadius: 8, fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-        Click away or press <strong style={{ color: "var(--text-primary)" }}>Backspace/Delete</strong> on the canvas to remove this transition.
+        Rules run when this transition fires; a matched blocking rule stops it.
+        Press <strong style={{ color: "var(--text-primary)" }}>Delete</strong> on the canvas to remove this transition.
       </div>
     </div>
   );

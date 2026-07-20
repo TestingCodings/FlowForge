@@ -19,6 +19,10 @@ from .serializers import (
 )
 
 
+class _ComposeError(Exception):
+    """Raised inside the compose transaction to abort with a 400."""
+
+
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     queryset = WorkflowDefinition.objects.all().prefetch_related("states", "transitions", "rules")
     # Reads: viewer+. Writes: workflow_designer+.
@@ -118,6 +122,14 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         place (preserving attached forms and rules); entries without an id are
         created; existing rows absent from the payload are deleted.
 
+        Deep authoring (docs/BUILDER.md B4):
+        - a transition may carry `rules`: the list wholesale-replaces that
+          transition's rules (rules have no dependents, so replace is safe)
+        - a state may carry `form`: absent = leave alone, null = delete
+          (refused if it has submissions), object = update in place, or
+          create a new version when submissions exist (mirrors the forms
+          API's immutability contract)
+
         Refused with 409 if the workflow has instances — publish a new
         version instead (the builder offers this flow on 409).
         """
@@ -155,6 +167,17 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
                 errors.append(f"Transition '{tr.get('name')}' references an unknown state.")
         if errors:
             return Response({"detail": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            self._apply_compose(request, workflow, states_payload, transitions_payload)
+        except _ComposeError as exc:
+            return Response({"detail": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+
+        workflow.refresh_from_db()
+        return Response(WorkflowDefinitionSerializer(workflow).data)
+
+    def _apply_compose(self, request, workflow, states_payload, transitions_payload):
+        from apps.forms.models import FormDefinition
 
         with transaction.atomic():
             for field in ("name", "description", "reference_prefix", "is_active"):
@@ -202,6 +225,39 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
                     state = State.objects.create(workflow_definition=workflow, **shared)
                 state_by_name[state.name] = state
 
+                # Form upsert (only when the payload mentions the key at all)
+                if "form" in sp:
+                    form_spec = sp["form"]
+                    existing_form = (
+                        FormDefinition.objects.filter(state=state)
+                        .order_by("-version")
+                        .first()
+                    )
+                    if form_spec is None:
+                        if existing_form:
+                            if existing_form.submissions.exists():
+                                raise _ComposeError(
+                                    f"Form on state '{state.name}' has submissions and cannot be removed."
+                                )
+                            existing_form.delete()
+                    else:
+                        form_fields = dict(
+                            name=str(form_spec.get("name", f"{state.name} Form")),
+                            schema=form_spec.get("schema") or {},
+                        )
+                        if existing_form and not existing_form.submissions.exists():
+                            for k, v in form_fields.items():
+                                setattr(existing_form, k, v)
+                            existing_form.save()
+                        else:
+                            FormDefinition.objects.create(
+                                workflow_definition=workflow,
+                                state=state,
+                                version=(existing_form.version + 1) if existing_form else 1,
+                                created_by=request.user,
+                                **form_fields,
+                            )
+
             existing_transitions = {str(t.id): t for t in workflow.transitions.all()}
             payload_transition_ids = {str(t["id"]) for t in transitions_payload if t.get("id")}
             for tid, tr in existing_transitions.items():
@@ -223,10 +279,19 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
                         setattr(tr, k, v)
                     tr.save()
                 else:
-                    Transition.objects.create(workflow_definition=workflow, **shared)
+                    tr = Transition.objects.create(workflow_definition=workflow, **shared)
 
-        workflow.refresh_from_db()
-        return Response(WorkflowDefinitionSerializer(workflow).data)
+                # Rules replace wholesale when the payload mentions the key
+                if "rules" in tp:
+                    tr.rules.all().delete()
+                    for rp in tp.get("rules") or []:
+                        Rule.objects.create(
+                            workflow_definition=workflow,
+                            transition=tr,
+                            condition=rp.get("condition") or {},
+                            action=rp.get("action") or {},
+                            priority=int(rp.get("priority", 100)),
+                        )
 
     @action(detail=True, methods=["get"], url_path="version-history")
     def version_history(self, request, pk=None):
