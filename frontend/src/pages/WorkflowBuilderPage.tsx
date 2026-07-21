@@ -683,7 +683,7 @@ export default function WorkflowBuilderPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", gap: 0 }}>
       {/* Top bar: two flex groups that wrap as whole units on narrow widths,
           with nowrap buttons so labels never break mid-word. */}
-      <div style={{
+      <div className="builder-toolbar" style={{
         display: "flex", alignItems: "center", gap: 10, rowGap: 8, padding: "10px 16px",
         background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
         flexShrink: 0, flexWrap: "wrap",
@@ -724,43 +724,41 @@ export default function WorkflowBuilderPage() {
           {!isEdit && (
             <Link
               to="/workflows/new/text"
-              className="btn-secondary btn-sm hint"
+              className="btn-secondary btn-sm"
               style={{ textDecoration: "none", whiteSpace: "nowrap" }}
-              data-hint="Write this workflow as YAML instead"
+              title="Write this workflow as YAML instead"
             >
               YAML
             </Link>
           )}
           <button
-            className="btn-secondary btn-sm hint"
+            className="btn-secondary btn-sm btn-icon"
             onClick={undo}
             disabled={past.current.length === 0}
-            data-hint="Undo (Ctrl+Z)"
-            style={{ padding: "4px 10px" }}
+            title="Undo (Ctrl+Z)"
           >
             ↩
           </button>
           <button
-            className="btn-secondary btn-sm hint"
+            className="btn-secondary btn-sm btn-icon"
             onClick={redo}
             disabled={future.current.length === 0}
-            data-hint="Redo (Ctrl+Shift+Z)"
-            style={{ padding: "4px 10px" }}
+            title="Redo (Ctrl+Shift+Z)"
           >
             ↪
           </button>
           <button
-            className="btn-secondary btn-sm hint"
+            className="btn-secondary btn-sm"
             onClick={autoLayout}
-            data-hint="Arrange states left-to-right from the start state"
+            title="Arrange states left-to-right from the start state"
             style={{ whiteSpace: "nowrap" }}
           >
             Auto-layout
           </button>
           <button
-            className="btn-secondary btn-sm hint"
+            className="btn-secondary btn-sm"
             onClick={exportPng}
-            data-hint="Download the canvas as a PNG image"
+            title="Download the canvas as a PNG image"
             style={{ whiteSpace: "nowrap" }}
           >
             ⤓ PNG
@@ -777,7 +775,7 @@ export default function WorkflowBuilderPage() {
             className="btn-primary btn-sm"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
-            style={{ minWidth: 110, whiteSpace: "nowrap" }}
+            style={{ whiteSpace: "nowrap" }}
           >
             {saveMutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Save Workflow"}
           </button>

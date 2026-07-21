@@ -197,9 +197,11 @@ export default function StateGraph({
         style={{ display: "block", minWidth: svgW, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}
       >
         <defs>
-          <marker id="arr-active"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1" /></marker>
-          <marker id="arr-done"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#3fb950" /></marker>
-          <marker id="arr-pending" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#30363d" /></marker>
+          {/* userSpaceOnUse keeps arrowheads a fixed size, centred exactly on
+              the 1.5px stroke instead of scaling/drifting with it */}
+          <marker id="arr-active"  markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#6366f1" /></marker>
+          <marker id="arr-done"    markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#3fb950" /></marker>
+          <marker id="arr-pending" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#30363d" /></marker>
           <filter id="glow">
             <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -237,7 +239,7 @@ export default function StateGraph({
             const x2 = e.to.x + NODE_W / 2;
             const y2 = e.to.y + NODE_H;
             const arcY = graphBottom + 22 + k * 18;
-            d = `M ${x1} ${y1} C ${x1} ${arcY}, ${x2} ${arcY}, ${x2} ${y2 + 6}`;
+            d = `M ${x1} ${y1} C ${x1} ${arcY}, ${x2} ${arcY}, ${x2} ${y2 + 1}`;
             lx = (x1 + x2) / 2;
             ly = arcY + 1;
           } else {
@@ -250,9 +252,9 @@ export default function StateGraph({
             const dx = Math.abs(x2 - x1);
             if (dy > 4) {
               const cpX = x1 + dx * 0.4;
-              d = `M ${x1} ${y1} C ${cpX} ${y1}, ${cpX} ${y2}, ${x2} ${y2}`;
+              d = `M ${x1} ${y1} C ${cpX} ${y1}, ${cpX} ${y2}, ${x2 - 1} ${y2}`;
             } else {
-              d = `M ${x1} ${y1} L ${x2 - 8} ${y2}`;
+              d = `M ${x1} ${y1} L ${x2 - 1} ${y2}`;
             }
             lx = (x1 + x2) / 2;
             ly = (y1 + y2) / 2 - 6;
