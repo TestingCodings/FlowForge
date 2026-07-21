@@ -1,6 +1,6 @@
 <!-- Badges -->
 [![CI](https://github.com/TestingCodings/FlowForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TestingCodings/FlowForge/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6.svg)](https://www.typescriptlang.org/)
 
@@ -257,4 +257,14 @@ See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+[Business Source License 1.1](LICENSE) — source-available.
+
+- **Free** for evaluation, personal, educational, and research use, and for
+  internal business use within your own organisation (including running your
+  own processes in production).
+- **Requires a commercial licence** only to offer FlowForge, or a derivative,
+  to third parties as a competing hosted service or commercial product.
+- **Converts to Apache 2.0** on 2030-07-21.
+
+Versions up to commit `633def5` were released under the MIT License and remain
+available under those terms — see [LICENSE-MIT-HISTORICAL](LICENSE-MIT-HISTORICAL).
