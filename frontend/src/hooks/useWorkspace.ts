@@ -53,6 +53,11 @@ export function applyWorkspaceConfig(ui: Workspace["ui_config"] | undefined) {
   const font = FONT_OPTIONS.find(f => f.value === ui?.font);
   if (font && font.value !== "inter") root.style.setProperty("--font", font.stack);
   else root.style.removeProperty("--font");
+
+  // VISION Layer 1 "condensed vs spacious": a data attribute drives the
+  // spacing tokens in styles.css, so every component tightens together.
+  if (ui?.density === "compact") root.setAttribute("data-density", "compact");
+  else root.removeAttribute("data-density");
 }
 
 /** Backwards-compatible alias used by the theme editor's live preview. */

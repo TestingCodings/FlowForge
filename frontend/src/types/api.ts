@@ -53,7 +53,7 @@ export interface Rule {
   priority: number;
 }
 
-export type ShellName = "list" | "kanban" | "table" | "calendar";
+export type ShellName = "list" | "kanban" | "table" | "calendar" | "matrix";
 
 export interface ChildrenConfig {
   workflows?: string[];
@@ -62,14 +62,40 @@ export interface ChildrenConfig {
   roll_up?: boolean;
 }
 
+/** Matrix (TestRail-style) shell: instances laid out as rows × columns. */
+export interface MatrixConfig {
+  /** Row grouping: "parent" or "metadata.<key>". */
+  rows?: string;
+  /** Column grouping: "current_state" (default) or "metadata.<key>". */
+  columns?: string;
+}
+
 export interface WorkflowUiSchema {
   shell?: ShellName;
   card_fields?: string[];
   list_columns?: string[];
   date_field?: string;
   title_field?: string;
-  state_display?: Record<string, { colour?: string }>;
+  /** Kanban only: second-level grouping, e.g. "metadata.epic". */
+  swimlanes?: string;
+  state_display?: Record<string, { colour?: string; icon?: string }>;
   children?: ChildrenConfig;
+  matrix?: MatrixConfig;
+  instance_view?: InstanceViewConfig;
+}
+
+/** Per-workflow detail-page configuration (VISION Layer 2 `instance_view`). */
+export type InstancePanel =
+  | "description" | "metadata" | "comments" | "state_graph"
+  | "timeline" | "forms" | "children" | "relationships" | "tasks";
+
+export interface InstanceViewConfig {
+  /** Metadata key used as the page title, falling back to the reference. */
+  title_field?: string;
+  /** Which panels to render, in order. Omitted = platform default set. */
+  panels?: InstancePanel[];
+  /** "sidebar" (default) or "stacked". */
+  layout?: "sidebar" | "stacked";
 }
 
 export interface ChildrenStats {
@@ -87,6 +113,10 @@ export interface Workspace {
     theme?: Record<string, string>;
     font?: string;
     date_format?: string;
+    /** Workspace fallback shell for workflows with no ui_schema.shell. */
+    default_view?: ShellName;
+    /** "comfortable" (default) or "compact" — drives spacing tokens. */
+    density?: "comfortable" | "compact";
   };
   updated_at: string;
 }

@@ -116,6 +116,9 @@ class WorkspaceView(generics.GenericAPIView):
             for key, valid in (
                 ("font", {"inter", "system", "serif", "mono"}),
                 ("date_format", {"locale", "dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"}),
+                # VISION Layer 1: workspace-wide fallback shell + UI density
+                ("default_view", {"list", "kanban", "table", "calendar", "matrix"}),
+                ("density", {"comfortable", "compact"}),
             ):
                 if key in ui and ui[key] not in valid:
                     return Response(

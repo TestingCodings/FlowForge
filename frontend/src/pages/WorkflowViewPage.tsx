@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { Transition, Workflow, WorkflowInstance } from "../types/api";
 import { SHELL_REGISTRY } from "../components/shells";
+import { useWorkspace } from "../hooks/useWorkspace";
 
 /**
  * Renders a workflow through its configured shell (ui_schema.shell).
@@ -15,6 +16,7 @@ export default function WorkflowViewPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const { data: workspace } = useWorkspace();
 
   const { data: wf } = useQuery<Workflow>({
     queryKey: ["workflow", id],
@@ -41,7 +43,9 @@ export default function WorkflowViewPage() {
 
   if (!wf) return <div className="skeleton" style={{ height: 320, borderRadius: 10 }} />;
 
-  const shellName = wf.ui_schema?.shell ?? "list";
+  // Per-workflow shell wins; the workspace default_view (VISION Layer 1) is
+  // the fallback for workflows that never chose one.
+  const shellName = wf.ui_schema?.shell ?? workspace?.ui_config?.default_view ?? "list";
   const Shell = SHELL_REGISTRY[shellName];
 
   // "list" (or anything unregistered) is the platform default instances view

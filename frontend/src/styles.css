@@ -735,3 +735,17 @@ pre {
   height: 30px;
   padding: 0 10px;
 }
+
+/* ─── Density (VISION Layer 1: "condensed vs spacious") ─── */
+/* Set by applyWorkspaceConfig from ui_config.density. Tightens the shared
+   containers so every page condenses together rather than per-component. */
+:root[data-density="compact"] .card { padding: 12px; border-radius: 10px; }
+:root[data-density="compact"] .stat-card { padding: 12px 14px; }
+:root[data-density="compact"] .stat-card .value { font-size: 1.55rem; }
+:root[data-density="compact"] .main-content { padding: 16px 20px; }
+:root[data-density="compact"] .page-header { margin-bottom: 14px; }
+:root[data-density="compact"] .table th { padding: 6px 9px; }
+:root[data-density="compact"] .table td { padding: 7px 9px; }
+:root[data-density="compact"] .grid { gap: 10px; }
+:root[data-density="compact"] .stats-grid { gap: 8px; margin-bottom: 14px; }
+:root[data-density="compact"] .card-header { margin-bottom: 10px; }

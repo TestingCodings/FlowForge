@@ -4,6 +4,40 @@ All notable changes to FlowForge are documented here. The format loosely
 follows [Keep a Changelog](https://keepachangelog.com); versions are
 retrospective milestones rather than published packages.
 
+## [0.8.0] — 2026-07-21 · Layer 1 & 2 completion, relicensing
+
+### Changed
+- **Relicensed to Business Source License 1.1** (source-available). Free for
+  evaluation, personal, educational, research, and internal business use
+  including production; a commercial licence is required only to offer
+  FlowForge as a competing hosted service or product. Converts to Apache 2.0
+  on 2030-07-21. Versions through `633def5` remain MIT.
+
+### Added
+- **Matrix shell** (VISION Layer 2) — the TestRail-style cross-product view.
+  Instances are laid out as rows × columns via `ui_schema.matrix`
+  (`{rows, columns}`, each `current_state` / `parent` / `metadata.<key>`),
+  cells coloured by state, transitions fired from a cell detail dialog.
+  State-grouped columns follow the workflow's own state order.
+- **Kanban swimlanes** — `ui_schema.swimlanes` adds a second grouping level
+  (e.g. `metadata.epic`); drag-to-transition works across lanes.
+- **`instance_view` config** — a workflow can now choose its detail-page
+  title field and which panels appear in what order
+  (`{title_field, panels[], layout}`).
+- **`state_display.icon`** — the icon vocabulary from the spec
+  (`circle`/`play`/`check`/`x`/…) renders in kanban columns and matrix cells,
+  mapped to unicode so no icon font is needed and glyphs survive PNG export.
+- **Workspace `default_view`** — a workspace-level fallback shell for
+  workflows that never chose one.
+- **Workspace `density`** — "comfortable" (default) or "compact", driving
+  shared spacing tokens so every page condenses together.
+
+### Fixed
+- SLA webhook test asserted against `NotificationLog`, which stopped
+  receiving webhook rows when delivery moved to `WebhookDeliveryLog` in
+  0.6.0 — the assertion now targets the correct model. Full backend suite
+  green at 178 tests.
+
 ## [0.7.1] — 2026-07-20
 
 ### Fixed

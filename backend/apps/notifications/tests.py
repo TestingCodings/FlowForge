@@ -229,7 +229,7 @@ def test_check_slas_notifies_once_per_state_entry(setup_context):
     from django.core.management import call_command
     from django.utils import timezone
 
-    from apps.notifications.models import EventTrigger, NotificationLog
+    from apps.notifications.models import EventTrigger, WebhookDeliveryLog
 
     admin_user, wf, instance = setup_context
 
@@ -251,15 +251,19 @@ def test_check_slas_notifies_once_per_state_entry(setup_context):
     )
 
     class FakeResponse:
+        status_code = 200
+
         def raise_for_status(self):
             pass
 
-    with patch("apps.notifications.services.httpx.post", return_value=FakeResponse()):
+    # Webhook delivery is async now (see WebhookDeliveryLog): patch the task's
+    # transport rather than the old synchronous services.httpx.post.
+    with patch("apps.notifications.tasks.httpx.post", return_value=FakeResponse()):
         call_command("check_slas")
         call_command("check_slas")  # second run must not duplicate
 
     # Exactly one delivery and one immutable audit marker per state entry
-    breach_logs = NotificationLog.objects.filter(
+    breach_logs = WebhookDeliveryLog.objects.filter(
         workflow_instance=instance, event_trigger=EventTrigger.SLA_BREACHED
     )
     assert breach_logs.count() == 1

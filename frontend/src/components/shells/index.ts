@@ -5,6 +5,7 @@ import { ShellProps } from "./types";
 import KanbanShell from "./KanbanShell";
 import TableShell from "./TableShell";
 import CalendarShell from "./CalendarShell";
+import MatrixShell from "./MatrixShell";
 
 /**
  * The shell registry — the Layer 2/3 extension point.
@@ -17,6 +18,7 @@ export const SHELL_REGISTRY: Partial<Record<ShellName, ComponentType<ShellProps>
   kanban: KanbanShell,
   table: TableShell,
   calendar: CalendarShell,
+  matrix: MatrixShell,
 };
 
 export const SHELL_OPTIONS: { value: ShellName; label: string }[] = [
@@ -24,6 +26,7 @@ export const SHELL_OPTIONS: { value: ShellName; label: string }[] = [
   { value: "kanban",   label: "Kanban board" },
   { value: "table",    label: "Table" },
   { value: "calendar", label: "Calendar" },
+  { value: "matrix",   label: "Matrix (TestRail-style)" },
 ];
 
 export type { ShellProps } from "./types";

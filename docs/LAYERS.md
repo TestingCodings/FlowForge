@@ -1,5 +1,9 @@
 # Strengthening VISION Layers 1 & 2
 
+> **Status (2026-07-21):** items L2.1–L2.4 and L1.1/L1.3 are implemented.
+> Remaining: L1.2 (i18n), L2.5 (stepped-form), L2.6 (list-as-shell), and
+> L1.4 (multi-tenancy, deliberately deferred to Layer 3).
+
 Gap analysis of what [VISION.md](VISION.md) specifies for Layers 1–2 against
 what is actually built (July 2026), with a prioritised plan to close it.
 
@@ -22,9 +26,9 @@ name/tagline; server-side `ui_config` validation.
 
 | # | Gap | Spec reference | Effort |
 |---|-----|----------------|--------|
-| L1.1 | **`default_view` unused** — spec makes it a workspace-level default ("Kanban vs list, condensed vs spacious"); today the shell is only per-workflow, so a workspace has no fallback presentation | `"default_view": "kanban"` | 2–3 days |
+| L1.1 ✅ | **`default_view` unused** — spec makes it a workspace-level default ("Kanban vs list, condensed vs spacious"); today the shell is only per-workflow, so a workspace has no fallback presentation | `"default_view": "kanban"` | 2–3 days |
 | L1.2 | **`locale` absent** — no i18n scaffolding at all; dates honour a format string but nothing else localises | `"locale": "en-GB"` | 1–2 weeks (see ENHANCEMENT 3.1) |
-| L1.3 | **Density preference absent** — "condensed vs spacious" has no implementation; a `density` token driving spacing vars would satisfy it | Layer 1 prose | 2–3 days |
+| L1.3 ✅ | **Density preference absent** — "condensed vs spacious" has no implementation; a `density` token driving spacing vars would satisfy it | Layer 1 prose | 2–3 days |
 | L1.4 | **Workspace is a singleton** — spec says "*each* team or client gets a workspace". True per-tenant workspaces need an FK from users/workflows and request-scoped resolution | Layer 1 opening | 2–3 weeks |
 
 **Assessment:** L1.1 and L1.3 are quick and close the letter of the spec.
@@ -46,10 +50,10 @@ shared by the API and bundle import; documented in [SHELLS.md](SHELLS.md).
 
 | # | Gap | Spec reference | Effort |
 |---|-----|----------------|--------|
-| L2.1 | **Matrix shell missing** — the TestRail-style shell appears in both the capability table and the router listing, and the repo already ships TestRail seed workflows that have nothing to render them | `shell="matrix" → MatrixView` | 1–2 weeks |
-| L2.2 | **Swimlanes missing** — kanban config specifies `swimlanes: "metadata.epic"`; today kanban groups by state only | `"swimlanes": "metadata.epic"` | 4–5 days |
-| L2.3 | **`instance_view` config ignored** — spec lets a workflow choose its detail-page title field, which panels appear, and the layout; today every instance page is identical and hard-coded | `"instance_view": {...}` | 1 week |
-| L2.4 | **`state_display.icon` ignored** — colours are honoured, icons in the same object are silently dropped | `{"colour": "...", "icon": "play"}` | 2–3 days |
+| L2.1 ✅ | **Matrix shell missing** — the TestRail-style shell appears in both the capability table and the router listing, and the repo already ships TestRail seed workflows that have nothing to render them | `shell="matrix" → MatrixView` | 1–2 weeks |
+| L2.2 ✅ | **Swimlanes missing** — kanban config specifies `swimlanes: "metadata.epic"`; today kanban groups by state only | `"swimlanes": "metadata.epic"` | 4–5 days |
+| L2.3 ✅ | **`instance_view` config ignored** — spec lets a workflow choose its detail-page title field, which panels appear, and the layout; today every instance page is identical and hard-coded | `"instance_view": {...}` | 1 week |
+| L2.4 ✅ | **`state_display.icon` ignored** — colours are honoured, icons in the same object are silently dropped | `{"colour": "...", "icon": "play"}` | 2–3 days |
 | L2.5 | **Stepped-form shell missing** — the Typeform-style shell is in the capability table | "Stepped-form shell" | 1 week |
 | L2.6 | **`list` shell isn't a real shell** — it's the default page rather than a registry entry, so it can't be configured like the others and the registry has a hole | Router listing | 2–3 days |
 

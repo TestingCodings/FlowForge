@@ -23,9 +23,54 @@ export interface ShellProps {
 
 /** Resolve the configured colour for a state, if any. */
 export function stateColour(workflow: Workflow, stateName: string): string | undefined {
-  return (workflow.ui_schema?.state_display as Record<string, { colour?: string }> | undefined)?.[
-    stateName
-  ]?.colour;
+  return workflow.ui_schema?.state_display?.[stateName]?.colour;
+}
+
+/**
+ * Named icons from ui_schema.state_display rendered as glyphs.
+ *
+ * The VISION spec names icons like "circle" / "play" / "check" / "x"; we map
+ * that vocabulary to unicode so no icon-font dependency is needed and the
+ * glyphs survive PNG export.
+ */
+const ICON_GLYPHS: Record<string, string> = {
+  circle: "○", "dot-filled": "●", play: "▶", pause: "❚❚", check: "✓",
+  x: "✕", alert: "!", clock: "◷", star: "★", flag: "⚑",
+  lock: "🔒", search: "🔍", edit: "✎", inbox: "▤", archive: "▣",
+};
+
+/** Resolve the configured icon glyph for a state, if any. */
+export function stateIcon(workflow: Workflow, stateName: string): string | undefined {
+  const icon = workflow.ui_schema?.state_display?.[stateName]?.icon;
+  if (!icon) return undefined;
+  return ICON_GLYPHS[icon] ?? icon;
+}
+
+export const ICON_OPTIONS = Object.keys(ICON_GLYPHS);
+export { ICON_GLYPHS };
+
+/**
+ * Resolve a grouping key for an instance.
+ *
+ * Accepts "current_state", "parent", or "metadata.<key>" — the vocabulary
+ * shared by matrix rows/columns and kanban swimlanes.
+ */
+export function groupValue(instance: WorkflowInstance, field: string): string {
+  if (field === "current_state") return instance.current_state_name ?? "";
+  if (field === "parent") return instance.parent_reference ?? "";
+  if (field.startsWith("metadata.")) {
+    const v = (instance.metadata_json ?? {})[field.slice(9)];
+    return v === undefined || v === null ? "" : String(v);
+  }
+  return "";
+}
+
+/** Human label for a grouping field, for headers and legends. */
+export function groupLabel(field: string): string {
+  if (field === "current_state") return "State";
+  if (field === "parent") return "Parent";
+  if (field.startsWith("metadata.")) return field.slice(9);
+  return field;
 }
 
 /** Resolve a card/row title from ui_schema.title_field, falling back to the reference. */

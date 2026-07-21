@@ -1,10 +1,10 @@
-import { useState, useCallback } from "react";
+import { Fragment, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
 import {
-  WorkflowInstance, Transition, AuditEntry, UserProfile,
+  WorkflowInstance, Transition, AuditEntry, UserProfile, InstancePanel,
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
@@ -93,6 +93,27 @@ export default function InstanceDetailPage() {
   const visitedStateNames: string[] = [
     ...(auditData?.results ?? []).filter(e => e.to_state).map(e => e.to_state as string),
   ];
+
+  /* ── instance_view config (VISION Layer 2) ──
+     Lets a workflow choose its detail-page title and which panels appear in
+     what order. Unconfigured workflows get the platform default below, so
+     existing pages are unchanged. */
+  const DEFAULT_PANELS: InstancePanel[] = [
+    "state_graph", "forms", "children", "relationships", "timeline",
+  ];
+  const instanceView = workflow?.ui_schema?.instance_view;
+  const orderedPanels: InstancePanel[] = (instanceView?.panels ?? DEFAULT_PANELS)
+    // "description"/"metadata"/"comments" live in the fixed two-column grid
+    // above; only the standalone panels participate in ordering.
+    .filter((p): p is InstancePanel => DEFAULT_PANELS.includes(p));
+
+  const titleFieldValue = instanceView?.title_field
+    ? (instance?.metadata_json ?? {})[instanceView.title_field]
+    : undefined;
+  const viewTitle =
+    titleFieldValue === undefined || titleFieldValue === null || titleFieldValue === ""
+      ? null
+      : String(titleFieldValue);
 
   /* ── Mutations ── */
   const transitionMutation = useMutation({
@@ -269,11 +290,18 @@ export default function InstanceDetailPage() {
         <span style={{ color: "var(--text-primary)" }}>{instance.reference_number}</span>
       </div>
 
-      {/* Header */}
+      {/* Header — title_field promotes a metadata value above the reference */}
       <div className="page-header">
         <div className="page-header-left">
-          <h2>{instance.reference_number}</h2>
-          <p>{instance.workflow_definition_name}</p>
+          <h2>{viewTitle ?? instance.reference_number}</h2>
+          <p>
+            {viewTitle && (
+              <span style={{ fontFamily: "monospace" }}>
+                {instance.reference_number}{" · "}
+              </span>
+            )}
+            {instance.workflow_definition_name}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {myRoles.map(r => (
@@ -284,19 +312,6 @@ export default function InstanceDetailPage() {
           </span>
         </div>
       </div>
-
-      {/* State graph */}
-      {workflow && (
-        <div className="mb-4">
-          <StateGraph
-            states={workflow.states ?? []}
-            transitions={workflow.transitions ?? []}
-            currentStateId={instance.current_state}
-            visitedStateNames={visitedStateNames}
-            isTerminal={isCompleted}
-          />
-        </div>
-      )}
 
       {/* Alert banners */}
       {blockReason && (
@@ -529,125 +544,163 @@ export default function InstanceDetailPage() {
         </div>
       </div>
 
-      {/* ── State form ── */}
-      {instance.current_form && !isCompleted && (
-        <StateFormPanel
-          form={instance.current_form}
-          canSubmit={userCan(myRoles, "transition")}
-          isPending={formMutation.isPending}
-          onSubmit={(data) =>
-            formMutation.mutate({ form_definition: instance.current_form!.id, data })
-          }
-          submitError={
-            (formMutation.error as any)?.response?.data
-              ? JSON.stringify((formMutation.error as any).response.data)
-              : formMutation.isError ? "Submission failed" : null
-          }
-        />
-      )}
-
-      {/* ── Sub-instances ── */}
-      <ChildrenPanel
-        instance={instance}
-        workflow={workflow}
-        canEdit={userCan(myRoles, "transition")}
-      />
-
-      {/* ── Relationships ── */}
-      <RelationshipsPanel
-        instance={instance}
-        myRoles={myRoles}
-        showLinkForm={showLinkForm}
-        setShowLinkForm={setShowLinkForm}
-        linkQuery={linkQuery}
-        linkResults={linkResults}
-        linkTarget={linkTarget}
-        setLinkTarget={setLinkTarget}
-        linkType={linkType}
-        setLinkType={setLinkType}
-        linkNotes={linkNotes}
-        setLinkNotes={setLinkNotes}
-        linkErr={linkErr}
-        onSearch={searchInstances}
-        onLink={() => {
-          if (!linkTarget) { setLinkErr("Select a target instance."); return; }
-          if (!linkType.trim()) { setLinkErr("Relationship type is required."); return; }
-          linkMutation.mutate({ to_instance: linkTarget.id, rel_type: linkType.trim(), notes: linkNotes });
-        }}
-        onUnlink={(relId) => unlinkMutation.mutate(relId)}
-        isPending={linkMutation.isPending}
-      />
-
-      {/* ── Audit trail / comments ── */}
-      <div className="card mt-4">
-        <div className="card-header">
-          <h3>Timeline <Hint tip="A permanent history of everything that happened to this item — every stage change, comment, and edit, with who did it and when. It cannot be altered." /></h3>
-          <span className="badge badge-inactive">{(auditData?.results ?? []).length} events</span>
-        </div>
-        {(auditData?.results ?? []).length === 0 ? (
-          <p className="text-muted text-sm">No events yet.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {[...(auditData?.results ?? [])].reverse().map((entry: AuditEntry, i) => {
-              const isComment = entry.action_type === "comment";
-              const body = isComment ? (entry.payload?.body as string) : null;
-              return (
-                <div key={entry.id} style={{
-                  display: "flex", gap: 12, padding: "12px 0",
-                  borderBottom: i < (auditData?.results?.length ?? 0) - 1 ? "1px solid var(--border)" : "none",
-                }}>
-                  {/* Timeline dot */}
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 2 }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: "50%",
-                      background: isComment ? "rgba(99,102,241,0.12)" : "var(--bg-elevated)",
-                      border: `2px solid ${isComment ? "#6366f1" : "var(--border)"}`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12,
-                    }}>
-                      {isComment ? "💬" : eventIcon(entry.action_type)}
+      {/* ── Panels, rendered in the order ui_schema.instance_view.panels gives ── */}
+      {orderedPanels.map((panelName) => {
+        switch (panelName) {
+          case "state_graph": return (
+            <Fragment key="state_graph">
+                  {/* State graph */}
+                  {workflow && (
+                    <div className="mb-4">
+                      <StateGraph
+                        states={workflow.states ?? []}
+                        transitions={workflow.transitions ?? []}
+                        currentStateId={instance.current_state}
+                        visitedStateNames={visitedStateNames}
+                        isTerminal={isCompleted}
+                      />
                     </div>
-                  </div>
+                  )}
 
-                  {/* Content */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="flex items-center gap-2" style={{ marginBottom: 4, flexWrap: "wrap" }}>
-                      <span className={`badge ${auditBadgeClass(entry.action_type)}`} style={{ fontSize: "0.7rem" }}>
-                        {entry.action_type.replace(/_/g, " ")}
-                      </span>
-                      {entry.from_state && entry.to_state && (
-                        <span className="text-xs text-muted">
-                          {entry.from_state} → {entry.to_state}
-                        </span>
-                      )}
-                      {entry.from_state && !entry.to_state && !isComment && (
-                        <span className="text-xs text-muted">{entry.from_state}</span>
-                      )}
+            </Fragment>
+          );
+          case "forms": return (
+            <Fragment key="forms">
+                  {/* ── State form ── */}
+                  {instance.current_form && !isCompleted && (
+                    <StateFormPanel
+                      form={instance.current_form}
+                      canSubmit={userCan(myRoles, "transition")}
+                      isPending={formMutation.isPending}
+                      onSubmit={(data) =>
+                        formMutation.mutate({ form_definition: instance.current_form!.id, data })
+                      }
+                      submitError={
+                        (formMutation.error as any)?.response?.data
+                          ? JSON.stringify((formMutation.error as any).response.data)
+                          : formMutation.isError ? "Submission failed" : null
+                      }
+                    />
+                  )}
+            </Fragment>
+          );
+          case "children": return (
+            <Fragment key="children">
+                  {/* ── Sub-instances ── */}
+                  <ChildrenPanel
+                    instance={instance}
+                    workflow={workflow}
+                    canEdit={userCan(myRoles, "transition")}
+                  />
+
+            </Fragment>
+          );
+          case "relationships": return (
+            <Fragment key="relationships">
+                  {/* ── Relationships ── */}
+                  <RelationshipsPanel
+                    instance={instance}
+                    myRoles={myRoles}
+                    showLinkForm={showLinkForm}
+                    setShowLinkForm={setShowLinkForm}
+                    linkQuery={linkQuery}
+                    linkResults={linkResults}
+                    linkTarget={linkTarget}
+                    setLinkTarget={setLinkTarget}
+                    linkType={linkType}
+                    setLinkType={setLinkType}
+                    linkNotes={linkNotes}
+                    setLinkNotes={setLinkNotes}
+                    linkErr={linkErr}
+                    onSearch={searchInstances}
+                    onLink={() => {
+                      if (!linkTarget) { setLinkErr("Select a target instance."); return; }
+                      if (!linkType.trim()) { setLinkErr("Relationship type is required."); return; }
+                      linkMutation.mutate({ to_instance: linkTarget.id, rel_type: linkType.trim(), notes: linkNotes });
+                    }}
+                    onUnlink={(relId) => unlinkMutation.mutate(relId)}
+                    isPending={linkMutation.isPending}
+                  />
+
+            </Fragment>
+          );
+          case "timeline": return (
+            <Fragment key="timeline">
+                  {/* ── Audit trail / comments ── */}
+                  <div className="card mt-4">
+                    <div className="card-header">
+                      <h3>Timeline <Hint tip="A permanent history of everything that happened to this item — every stage change, comment, and edit, with who did it and when. It cannot be altered." /></h3>
+                      <span className="badge badge-inactive">{(auditData?.results ?? []).length} events</span>
                     </div>
+                    {(auditData?.results ?? []).length === 0 ? (
+                      <p className="text-muted text-sm">No events yet.</p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                        {[...(auditData?.results ?? [])].reverse().map((entry: AuditEntry, i) => {
+                          const isComment = entry.action_type === "comment";
+                          const body = isComment ? (entry.payload?.body as string) : null;
+                          return (
+                            <div key={entry.id} style={{
+                              display: "flex", gap: 12, padding: "12px 0",
+                              borderBottom: i < (auditData?.results?.length ?? 0) - 1 ? "1px solid var(--border)" : "none",
+                            }}>
+                              {/* Timeline dot */}
+                              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 2 }}>
+                                <div style={{
+                                  width: 28, height: 28, borderRadius: "50%",
+                                  background: isComment ? "rgba(99,102,241,0.12)" : "var(--bg-elevated)",
+                                  border: `2px solid ${isComment ? "#6366f1" : "var(--border)"}`,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: 12,
+                                }}>
+                                  {isComment ? "💬" : eventIcon(entry.action_type)}
+                                </div>
+                              </div>
 
-                    {/* Comment body */}
-                    {body && (
-                      <div style={{
-                        background: "var(--bg-elevated)", borderRadius: 8, padding: "8px 12px",
-                        marginBottom: 6, fontSize: "0.85rem", lineHeight: 1.6,
-                        borderLeft: "3px solid rgba(99,102,241,0.5)",
-                        color: "var(--text-primary)",
-                      }}>
-                        {body}
+                              {/* Content */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="flex items-center gap-2" style={{ marginBottom: 4, flexWrap: "wrap" }}>
+                                  <span className={`badge ${auditBadgeClass(entry.action_type)}`} style={{ fontSize: "0.7rem" }}>
+                                    {entry.action_type.replace(/_/g, " ")}
+                                  </span>
+                                  {entry.from_state && entry.to_state && (
+                                    <span className="text-xs text-muted">
+                                      {entry.from_state} → {entry.to_state}
+                                    </span>
+                                  )}
+                                  {entry.from_state && !entry.to_state && !isComment && (
+                                    <span className="text-xs text-muted">{entry.from_state}</span>
+                                  )}
+                                </div>
+
+                                {/* Comment body */}
+                                {body && (
+                                  <div style={{
+                                    background: "var(--bg-elevated)", borderRadius: 8, padding: "8px 12px",
+                                    marginBottom: 6, fontSize: "0.85rem", lineHeight: 1.6,
+                                    borderLeft: "3px solid rgba(99,102,241,0.5)",
+                                    color: "var(--text-primary)",
+                                  }}>
+                                    {body}
+                                  </div>
+                                )}
+
+                                <div className="flex gap-3 text-xs text-muted" style={{ flexWrap: "wrap" }}>
+                                  <span>{entry.actor_email || "System"}</span>
+                                  <span>{formatDateTime(entry.created_at)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
-
-                    <div className="flex gap-3 text-xs text-muted" style={{ flexWrap: "wrap" }}>
-                      <span>{entry.actor_email || "System"}</span>
-                      <span>{formatDateTime(entry.created_at)}</span>
-                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+            </Fragment>
+          );
+          default: return null;
+        }
+      })}
     </div>
   );
 }
