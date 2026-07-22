@@ -9,6 +9,7 @@ import {
   useWorkspace,
 } from "../hooks/useWorkspace";
 import Hint from "../components/Hint";
+import { LOCALES } from "../i18n";
 
 const THEME_FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "accent",         label: "Accent",           hint: "Buttons, links, highlights" },
@@ -69,6 +70,8 @@ export default function WorkspacePage() {
   const [logoUrl, setLogoUrl] = useState("");
   const [font, setFont] = useState("inter");
   const [dateFormat, setDateFormat] = useState("locale");
+  const [locale, setLocale] = useState("en-GB");
+  const [density, setDensity] = useState("comfortable");
   const [theme, setTheme] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -80,6 +83,8 @@ export default function WorkspacePage() {
     setLogoUrl(workspace.logo_url);
     setFont(workspace.ui_config?.font ?? "inter");
     setDateFormat(workspace.ui_config?.date_format ?? "locale");
+    setLocale(workspace.ui_config?.locale ?? "en-GB");
+    setDensity(workspace.ui_config?.density ?? "comfortable");
     setTheme(workspace.ui_config?.theme ?? {});
   }, [workspace]);
 
@@ -92,7 +97,7 @@ export default function WorkspacePage() {
     mutationFn: async () =>
       (await apiClient.put("/workspace/", {
         name, tagline, logo_url: logoUrl,
-        ui_config: { theme, font, date_format: dateFormat },
+        ui_config: { theme, font, date_format: dateFormat, locale, density },
       })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace"] });
@@ -154,8 +159,22 @@ export default function WorkspacePage() {
                 {DATE_FORMAT_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
             </div>
+            <div className="form-group">
+              <label>Language</label>
+              <select value={locale} onChange={e => setLocale(e.target.value)}>
+                {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Density</label>
+              <select value={density} onChange={e => setDensity(e.target.value)}>
+                <option value="comfortable">Comfortable (default)</option>
+                <option value="compact">Compact</option>
+              </select>
+            </div>
             <p className="text-xs text-muted" style={{ lineHeight: 1.6 }}>
-              Dates across the platform (instance tables, timelines, boards) follow this format.
+              Dates, language, and spacing across the platform follow these
+              workspace settings for every user.
             </p>
           </div>
         </div>

@@ -4,6 +4,26 @@ All notable changes to FlowForge are documented here. The format loosely
 follows [Keep a Changelog](https://keepachangelog.com); versions are
 retrospective milestones rather than published packages.
 
+## [0.8.1] — 2026-07-22
+
+### Added
+- **i18n scaffolding** (VISION Layer 1 `locale`) — a dependency-free
+  translation layer: workspace picks a language in Settings, `useTranslation().t()`
+  resolves messages with en-GB fallback and `{placeholder}` interpolation, and
+  `<html lang>` tracks the locale for native date/number formatting. Ships
+  English (UK) and Spanish catalogues; nav, section headers, and common actions
+  are wired as the proof. Adding a language is one catalogue file plus a registry
+  line.
+- **Workspace Language and Density pickers** in Settings (density was added in
+  0.8.0 but had no UI control).
+
+### Fixed
+- Builder transitions could appear to leave a node's **left** edge: the visible
+  right-hand source handle had no id, so an edge with an undefined source handle
+  attached ambiguously; every handle now has an explicit id and forward/backward
+  edges reference them directly. A companion effect-dependency fix normalises a
+  newly-created backward edge immediately instead of on the next node move.
+
 ## [0.8.0] — 2026-07-21 · Layer 1 & 2 completion, relicensing
 
 ### Changed

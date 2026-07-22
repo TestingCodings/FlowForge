@@ -117,6 +117,8 @@ export interface Workspace {
     default_view?: ShellName;
     /** "comfortable" (default) or "compact" — drives spacing tokens. */
     density?: "comfortable" | "compact";
+    /** BCP-47 UI language tag, e.g. "en-GB" | "es-ES" (VISION Layer 1). */
+    locale?: string;
   };
   updated_at: string;
 }

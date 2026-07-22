@@ -1,8 +1,8 @@
 # Strengthening VISION Layers 1 & 2
 
-> **Status (2026-07-21):** items L2.1–L2.4 and L1.1/L1.3 are implemented.
-> Remaining: L1.2 (i18n), L2.5 (stepped-form), L2.6 (list-as-shell), and
-> L1.4 (multi-tenancy, deliberately deferred to Layer 3).
+> **Status (2026-07-22):** items L2.1–L2.4, L1.1–L1.3 are implemented.
+> Remaining: L2.5 (stepped-form), L2.6 (list-as-shell), and L1.4
+> (multi-tenancy, deliberately deferred to Layer 3).
 
 Gap analysis of what [VISION.md](VISION.md) specifies for Layers 1–2 against
 what is actually built (July 2026), with a prioritised plan to close it.
@@ -27,7 +27,7 @@ name/tagline; server-side `ui_config` validation.
 | # | Gap | Spec reference | Effort |
 |---|-----|----------------|--------|
 | L1.1 ✅ | **`default_view` unused** — spec makes it a workspace-level default ("Kanban vs list, condensed vs spacious"); today the shell is only per-workflow, so a workspace has no fallback presentation | `"default_view": "kanban"` | 2–3 days |
-| L1.2 | **`locale` absent** — no i18n scaffolding at all; dates honour a format string but nothing else localises | `"locale": "en-GB"` | 1–2 weeks (see ENHANCEMENT 3.1) |
+| L1.2 ✅ | **`locale` absent** — no i18n scaffolding at all; dates honour a format string but nothing else localises | `"locale": "en-GB"` | 1–2 weeks (see ENHANCEMENT 3.1) |
 | L1.3 ✅ | **Density preference absent** — "condensed vs spacious" has no implementation; a `density` token driving spacing vars would satisfy it | Layer 1 prose | 2–3 days |
 | L1.4 | **Workspace is a singleton** — spec says "*each* team or client gets a workspace". True per-tenant workspaces need an FK from users/workflows and request-scoped resolution | Layer 1 opening | 2–3 weeks |
 

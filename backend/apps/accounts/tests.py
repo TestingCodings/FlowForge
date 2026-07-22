@@ -116,3 +116,53 @@ class TestProtectedEndpoint:
         url = reverse("auth-refresh")
         response = api_client.post(url, {"refresh": "not-a-real-token"}, format="json")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+class TestWorkspaceConfig:
+    """VISION Layer 1 ui_config validation (locale, density, default_view)."""
+
+    def _admin(self):
+        from conftest import give_role
+
+        admin = User.objects.create_user(
+            email="wsadmin@example.com", password="StrongPass123!",
+            first_name="WS", last_name="Admin",
+        )
+        give_role(admin, "platform_admin")
+        return admin
+
+    def _auth(self, api_client, user):
+        login = api_client.post(
+            reverse("auth-login"),
+            {"email": user.email, "password": "StrongPass123!"},
+            format="json",
+        )
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        return api_client
+
+    def test_accepts_locale_density_default_view(self, api_client):
+        client = self._auth(api_client, self._admin())
+        resp = client.put(
+            reverse("workspace"),
+            {"ui_config": {"locale": "es-ES", "density": "compact", "default_view": "matrix"}},
+            format="json",
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        cfg = resp.data["ui_config"]
+        assert cfg["locale"] == "es-ES"
+        assert cfg["density"] == "compact"
+        assert cfg["default_view"] == "matrix"
+
+    @pytest.mark.parametrize("key,value", [
+        ("locale", "fr-FR"),
+        ("density", "roomy"),
+        ("default_view", "gantt"),
+    ])
+    def test_rejects_invalid_values(self, api_client, key, value):
+        client = self._auth(api_client, self._admin())
+        resp = client.put(
+            reverse("workspace"), {"ui_config": {key: value}}, format="json",
+        )
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert key in resp.data["detail"]

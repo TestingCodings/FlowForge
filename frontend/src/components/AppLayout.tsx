@@ -4,31 +4,33 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { UserProfile } from "../types/api";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useTranslation, type MessageKey } from "../i18n";
 
-const NAV = [
+// Labels are message keys resolved through t() at render time (VISION Layer 1).
+const NAV: { sectionKey: MessageKey; links: { to: string; key: MessageKey; icon: JSX.Element }[] }[] = [
   {
-    section: "Overview",
+    sectionKey: "nav.overview",
     links: [
-      { to: "/dashboard", label: "Dashboard",  icon: <DashIcon /> },
-      { to: "/instances", label: "Instances",  icon: <InstanceIcon /> },
-      { to: "/tasks",     label: "My Tasks",   icon: <TaskIcon /> },
+      { to: "/dashboard", key: "nav.dashboard", icon: <DashIcon /> },
+      { to: "/instances", key: "nav.instances", icon: <InstanceIcon /> },
+      { to: "/tasks",     key: "nav.tasks",     icon: <TaskIcon /> },
     ],
   },
   {
-    section: "Configuration",
+    sectionKey: "nav.configuration",
     links: [
-      { to: "/workflows",            label: "Workflows",    icon: <WorkflowIcon /> },
-      { to: "/workflows/new",        label: "New Workflow", icon: <PlusIcon /> },
-      { to: "/workflows/templates",  label: "Templates",   icon: <TemplateIcon /> },
+      { to: "/workflows",            key: "nav.workflows",    icon: <WorkflowIcon /> },
+      { to: "/workflows/new",        key: "nav.newWorkflow",  icon: <PlusIcon /> },
+      { to: "/workflows/templates",  key: "nav.templates",    icon: <TemplateIcon /> },
     ],
   },
   {
-    section: "Administration",
+    sectionKey: "nav.administration",
     links: [
-      { to: "/admin/audit",     label: "Audit Log",  icon: <AuditIcon /> },
-      { to: "/admin/users",     label: "Users",      icon: <UsersIcon /> },
-      { to: "/admin/workspace", label: "Workspace",  icon: <WorkflowIcon /> },
-      { to: "/help",            label: "User Guide", icon: <HelpIcon /> },
+      { to: "/admin/audit",     key: "nav.auditLog",  icon: <AuditIcon /> },
+      { to: "/admin/users",     key: "nav.users",     icon: <UsersIcon /> },
+      { to: "/admin/workspace", key: "nav.workspace", icon: <WorkflowIcon /> },
+      { to: "/help",            key: "nav.userGuide", icon: <HelpIcon /> },
     ],
   },
 ];
@@ -60,6 +62,7 @@ export default function AppLayout() {
   });
 
   const { data: workspace } = useWorkspace();
+  const { t } = useTranslation();
 
   const { data: allUsers = [] } = useQuery<UserProfile[]>({
     queryKey: ["users"],
@@ -120,8 +123,8 @@ export default function AppLayout() {
 
         <nav className="sidebar-nav">
           {NAV.map((section) => (
-            <div key={section.section}>
-              <div className="sidebar-section-label">{section.section}</div>
+            <div key={section.sectionKey}>
+              <div className="sidebar-section-label">{t(section.sectionKey)}</div>
               {section.links.map((link) => (
                 <NavLink
                   key={link.to}
@@ -130,7 +133,7 @@ export default function AppLayout() {
                   end={link.to === "/workflows"}
                 >
                   {link.icon}
-                  {link.label}
+                  {t(link.key)}
                 </NavLink>
               ))}
             </div>
@@ -223,7 +226,7 @@ export default function AppLayout() {
             </div>
           </div>
           <button className="btn-logout" onClick={logout}>
-            <LogoutIcon /> Sign out
+            <LogoutIcon /> {t("action.signOut")}
           </button>
         </div>
       </aside>
