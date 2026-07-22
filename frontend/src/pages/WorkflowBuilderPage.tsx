@@ -165,10 +165,16 @@ export default function WorkflowBuilderPage() {
   // Live graph lint (mirrors backend dsl.lint_bundle)
   const lint = useMemo(() => lintGraph(nodes, edges), [nodes, edges]);
 
-  // Keep backward edges routed through near-side handles as nodes move
+  // Keep every edge attached to the correct handles: forward edges leave the
+  // right / enter the left; backward edges use the near-side handles. Depends
+  // on the edge id list too (not just nodes) so a freshly-created backward
+  // edge is normalised immediately, not only after the next node move.
+  // assignEdgeHandles returns the same array when nothing changes, so the
+  // setEdges bails out and this can't loop.
+  const edgeIds = edges.map((e) => e.id).join(",");
   useEffect(() => {
     setEdges((es) => assignEdgeHandles(nodes, es));
-  }, [nodes, setEdges]);
+  }, [nodes, edgeIds, setEdges]);
 
   // Undo/redo history (structural changes + node moves)
   const past = useRef<Snapshot[]>([]);

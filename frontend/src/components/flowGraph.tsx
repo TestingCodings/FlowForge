@@ -31,9 +31,14 @@ export function StateNode({ data, selected }: NodeProps) {
       cursor: "default",
       transition: "border-color 0.15s, background 0.15s",
     }}>
-      <Handle type="target" position={Position.Left} style={{ background: "#6366f1", border: "2px solid #30363d", width: 10, height: 10 }} />
-      {/* Invisible endpoints so backward edges can leave/enter the near side
-          instead of sweeping around the whole graph. Not draggable. */}
+      {/* Every handle carries an explicit id. With multiple handles of the
+          same type, an edge whose sourceHandle/targetHandle is undefined is
+          ambiguous and React Flow attaches it to whichever it resolves first
+          — which made forward edges appear to leave the node's LEFT side.
+          Forward edges use src-r/tgt-l; backward edges use src-l/tgt-r. */}
+      <Handle type="target" id="tgt-l" position={Position.Left} style={{ background: "#6366f1", border: "2px solid #30363d", width: 10, height: 10 }} />
+      {/* Invisible near-side endpoints so backward edges can leave/enter the
+          near side instead of sweeping around the graph. Not draggable. */}
       <Handle type="source" id="src-l" position={Position.Left} isConnectable={false}
         style={{ opacity: 0, pointerEvents: "none", width: 1, height: 1 }} />
       <Handle type="target" id="tgt-r" position={Position.Right} isConnectable={false}
@@ -51,7 +56,7 @@ export function StateNode({ data, selected }: NodeProps) {
         <div style={{ fontSize: 10, color: "#8b949e", marginTop: 4 }}>SLA: {d.slaHours}h</div>
       )}
 
-      <Handle type="source" position={Position.Right} style={{ background: "#6366f1", border: "2px solid #30363d", width: 10, height: 10 }} />
+      <Handle type="source" id="src-r" position={Position.Right} style={{ background: "#6366f1", border: "2px solid #30363d", width: 10, height: 10 }} />
     </div>
   );
 }
@@ -64,6 +69,9 @@ export function makeEdge(
 ): Edge {
   return {
     id, source, target,
+    // Default to the forward attachment; assignEdgeHandles flips backward
+    // edges to the near-side handles based on geometry.
+    sourceHandle: "src-r", targetHandle: "tgt-l",
     label: name,
     labelStyle: { fontSize: 11, fill: "#8b949e", fontWeight: 500 },
     labelBgStyle: { fill: "#161b22" },
@@ -106,9 +114,9 @@ export function assignEdgeHandles(nodes: Node[], edges: Edge[]): Edge[] {
     const tx = pos.get(e.target);
     if (sx === undefined || tx === undefined) return e;
     const backward = tx + NODE_W / 2 < sx;
-    const sourceHandle = backward ? "src-l" : undefined;
-    const targetHandle = backward ? "tgt-r" : undefined;
-    if ((e.sourceHandle ?? undefined) === sourceHandle && (e.targetHandle ?? undefined) === targetHandle) {
+    const sourceHandle = backward ? "src-l" : "src-r";
+    const targetHandle = backward ? "tgt-r" : "tgt-l";
+    if (e.sourceHandle === sourceHandle && e.targetHandle === targetHandle) {
       return e;
     }
     changed = true;
