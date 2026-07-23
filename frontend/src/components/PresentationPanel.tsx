@@ -83,11 +83,9 @@ export default function PresentationPanel({ workflow }: Props) {
       <div className="card-header">
         <h3>Presentation <Hint tip="Controls how this workflow looks for everyone: a simple list, a drag-and-drop board, a table, or a calendar — plus colours and which details appear on cards." /></h3>
         <div className="flex gap-2 items-center">
-          {shell !== "list" && (
-            <Link to={`/workflows/${workflow.id}/view`} className="btn-secondary btn-sm" style={{ textDecoration: "none" }}>
-              Open {shell} view
-            </Link>
-          )}
+          <Link to={`/workflows/${workflow.id}/view`} className="btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+            Open {shell} view
+          </Link>
           <button className="btn-primary btn-sm" onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? "Saving…" : "Save presentation"}
           </button>

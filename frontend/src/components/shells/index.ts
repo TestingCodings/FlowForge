@@ -6,15 +6,18 @@ import KanbanShell from "./KanbanShell";
 import TableShell from "./TableShell";
 import CalendarShell from "./CalendarShell";
 import MatrixShell from "./MatrixShell";
+import ListShell from "./ListShell";
 
 /**
  * The shell registry — the Layer 2/3 extension point.
  *
- * "list" maps to the platform's default instances table, so it has no entry
- * here; WorkflowViewPage redirects list-shell workflows to /instances.
- * Adding a shell = one component implementing ShellProps + one line here.
+ * Every shell, including "list", is a first-class registry entry, so all of
+ * them are configurable through the same ui_schema and rendered by the same
+ * WorkflowViewPage. Adding a shell = one component implementing ShellProps +
+ * one line here.
  */
-export const SHELL_REGISTRY: Partial<Record<ShellName, ComponentType<ShellProps>>> = {
+export const SHELL_REGISTRY: Record<ShellName, ComponentType<ShellProps>> = {
+  list: ListShell,
   kanban: KanbanShell,
   table: TableShell,
   calendar: CalendarShell,

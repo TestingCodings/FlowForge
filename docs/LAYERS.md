@@ -1,8 +1,8 @@
 # Strengthening VISION Layers 1 & 2
 
-> **Status (2026-07-22):** items L2.1–L2.4, L1.1–L1.3 are implemented.
-> Remaining: L2.5 (stepped-form), L2.6 (list-as-shell), and L1.4
-> (multi-tenancy, deliberately deferred to Layer 3).
+> **Status (2026-07-22):** items L2.1–L2.4, L2.6, L1.1–L1.3 are
+> implemented. Remaining: L2.5 (stepped-form) and L1.4 (multi-tenancy,
+> deliberately deferred to Layer 3).
 
 Gap analysis of what [VISION.md](VISION.md) specifies for Layers 1–2 against
 what is actually built (July 2026), with a prioritised plan to close it.
@@ -55,7 +55,7 @@ shared by the API and bundle import; documented in [SHELLS.md](SHELLS.md).
 | L2.3 ✅ | **`instance_view` config ignored** — spec lets a workflow choose its detail-page title field, which panels appear, and the layout; today every instance page is identical and hard-coded | `"instance_view": {...}` | 1 week |
 | L2.4 ✅ | **`state_display.icon` ignored** — colours are honoured, icons in the same object are silently dropped | `{"colour": "...", "icon": "play"}` | 2–3 days |
 | L2.5 | **Stepped-form shell missing** — the Typeform-style shell is in the capability table | "Stepped-form shell" | 1 week |
-| L2.6 | **`list` shell isn't a real shell** — it's the default page rather than a registry entry, so it can't be configured like the others and the registry has a hole | Router listing | 2–3 days |
+| L2.6 ✅ | **`list` shell isn't a real shell** — it's the default page rather than a registry entry, so it can't be configured like the others and the registry has a hole | Router listing | 2–3 days |
 
 **Assessment:** L2.1–L2.4 are the ones that matter. The matrix shell is the
 single most valuable missing piece: it's the only shell that renders a

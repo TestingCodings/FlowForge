@@ -266,11 +266,9 @@ export default function WorkflowDetailPage() {
           <span className="badge badge-inactive">
             v{wf.version}{wf.published_at ? "" : " · draft"}
           </span>
-          {(wf.ui_schema?.shell ?? "list") !== "list" && (
-            <Link to={`/workflows/${id}/view`} className="btn-primary btn-sm" style={{ textDecoration: "none" }}>
-              Open {wf.ui_schema?.shell} view
-            </Link>
-          )}
+          <Link to={`/workflows/${id}/view`} className="btn-primary btn-sm" style={{ textDecoration: "none" }}>
+            Open {wf.ui_schema?.shell ?? "list"} view
+          </Link>
           <Link
             to={`/workflows/${id}/edit`}
             className="btn-secondary btn-sm"

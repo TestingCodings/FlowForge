@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
@@ -44,12 +44,10 @@ export default function WorkflowViewPage() {
   if (!wf) return <div className="skeleton" style={{ height: 320, borderRadius: 10 }} />;
 
   // Per-workflow shell wins; the workspace default_view (VISION Layer 1) is
-  // the fallback for workflows that never chose one.
+  // the fallback for workflows that never chose one. Every shell — list
+  // included — is in the registry, so there's always a component to render.
   const shellName = wf.ui_schema?.shell ?? workspace?.ui_config?.default_view ?? "list";
-  const Shell = SHELL_REGISTRY[shellName];
-
-  // "list" (or anything unregistered) is the platform default instances view
-  if (!Shell) return <Navigate to="/instances" replace />;
+  const Shell = SHELL_REGISTRY[shellName] ?? SHELL_REGISTRY.list;
 
   const shellLabel = shellName.charAt(0).toUpperCase() + shellName.slice(1);
 
