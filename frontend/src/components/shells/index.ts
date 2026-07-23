@@ -7,6 +7,7 @@ import TableShell from "./TableShell";
 import CalendarShell from "./CalendarShell";
 import MatrixShell from "./MatrixShell";
 import ListShell from "./ListShell";
+import SteppedFormShell from "./SteppedFormShell";
 
 /**
  * The shell registry — the Layer 2/3 extension point.
@@ -22,14 +23,16 @@ export const SHELL_REGISTRY: Record<ShellName, ComponentType<ShellProps>> = {
   table: TableShell,
   calendar: CalendarShell,
   matrix: MatrixShell,
+  stepped_form: SteppedFormShell,
 };
 
 export const SHELL_OPTIONS: { value: ShellName; label: string }[] = [
-  { value: "list",     label: "List (default)" },
-  { value: "kanban",   label: "Kanban board" },
-  { value: "table",    label: "Table" },
-  { value: "calendar", label: "Calendar" },
-  { value: "matrix",   label: "Matrix (TestRail-style)" },
+  { value: "list",         label: "List (default)" },
+  { value: "kanban",       label: "Kanban board" },
+  { value: "table",        label: "Table" },
+  { value: "calendar",     label: "Calendar" },
+  { value: "matrix",       label: "Matrix (TestRail-style)" },
+  { value: "stepped_form", label: "Stepped form (wizard)" },
 ];
 
 export type { ShellProps } from "./types";

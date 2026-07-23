@@ -1,8 +1,8 @@
 # Strengthening VISION Layers 1 & 2
 
-> **Status (2026-07-22):** items L2.1–L2.4, L2.6, L1.1–L1.3 are
-> implemented. Remaining: L2.5 (stepped-form) and L1.4 (multi-tenancy,
-> deliberately deferred to Layer 3).
+> **Status (2026-07-22):** every Layer 1 & 2 gap except L1.4 is
+> implemented (L2.1–L2.6, L1.1–L1.3). L1.4 (multi-tenancy) is
+> deliberately deferred to Layer 3.
 
 Gap analysis of what [VISION.md](VISION.md) specifies for Layers 1–2 against
 what is actually built (July 2026), with a prioritised plan to close it.
@@ -54,7 +54,7 @@ shared by the API and bundle import; documented in [SHELLS.md](SHELLS.md).
 | L2.2 ✅ | **Swimlanes missing** — kanban config specifies `swimlanes: "metadata.epic"`; today kanban groups by state only | `"swimlanes": "metadata.epic"` | 4–5 days |
 | L2.3 ✅ | **`instance_view` config ignored** — spec lets a workflow choose its detail-page title field, which panels appear, and the layout; today every instance page is identical and hard-coded | `"instance_view": {...}` | 1 week |
 | L2.4 ✅ | **`state_display.icon` ignored** — colours are honoured, icons in the same object are silently dropped | `{"colour": "...", "icon": "play"}` | 2–3 days |
-| L2.5 | **Stepped-form shell missing** — the Typeform-style shell is in the capability table | "Stepped-form shell" | 1 week |
+| L2.5 ✅ | **Stepped-form shell missing** — the Typeform-style shell is in the capability table | "Stepped-form shell" | 1 week |
 | L2.6 ✅ | **`list` shell isn't a real shell** — it's the default page rather than a registry entry, so it can't be configured like the others and the registry has a hole | Router listing | 2–3 days |
 
 **Assessment:** L2.1–L2.4 are the ones that matter. The matrix shell is the
@@ -77,7 +77,7 @@ distinctive its board is.
 | 4 | **L1.1 `default_view` + L1.3 density** | Cheap, closes Layer 1's letter |
 | 5 | **L2.6 list-as-shell** | Tidies the registry once the others are in |
 | 6 | **L1.2 i18n** | Valuable but self-contained; can run in parallel with anything |
-| — | L1.4 multi-tenancy, L2.5 stepped-form | Deferred: the former is Layer 3 in disguise, the latter overlaps the forms feature |
+| — | L1.4 multi-tenancy | Deferred: real per-tenant isolation is Layer 3 in disguise |
 
 Items 1–4 total roughly 4–5 weeks and leave Layers 1 and 2 genuinely
 matching the spec rather than approximately matching it.

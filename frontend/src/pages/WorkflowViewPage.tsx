@@ -34,8 +34,11 @@ export default function WorkflowViewPage() {
   const transitionMutation = useMutation({
     mutationFn: async ({ instance, transition }: { instance: WorkflowInstance; transition: Transition }) =>
       (await apiClient.post(`/instances/${instance.id}/transition/`, { transition_id: transition.id })).data,
-    onSuccess: () => {
+    onSuccess: (_data, { instance }) => {
       qc.invalidateQueries({ queryKey: ["instances", "by-workflow", id] });
+      // Refresh the single-instance detail too, so shells that fetch it (the
+      // stepped-form wizard) advance to the new state and its form.
+      qc.invalidateQueries({ queryKey: ["instance", instance.id] });
       setError(null);
     },
     onError: (e: any) => setError(e?.response?.data?.detail ?? "Transition failed"),

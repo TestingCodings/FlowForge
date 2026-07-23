@@ -14,6 +14,13 @@ retrospective milestones rather than published packages.
   English (UK) and Spanish catalogues; nav, section headers, and common actions
   are wired as the proof. Adding a language is one catalogue file plus a registry
   line.
+- **Stepped-form shell** (VISION Layer 2) — the Typeform/wizard view. Walks a
+  single instance through its states as an ordered progress stepper, rendering
+  each state's form as one focused card; submitting the form and picking a
+  transition advances the instance, with required-form gating and rules still
+  enforced by the engine. Completes the shell registry named in the spec.
+- **List shell** is now a first-class registry entry (was a redirect), so every
+  shell — list included — is configurable through the same ui_schema.
 - **Workspace Language and Density pickers** in Settings (density was added in
   0.8.0 but had no UI control).
 

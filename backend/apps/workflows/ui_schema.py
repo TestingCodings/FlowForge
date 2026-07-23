@@ -7,7 +7,7 @@ source of truth for what a valid presentation config looks like — both the
 API endpoint and bundle import validate through here.
 
 Recognised keys:
-    shell         "list" | "kanban" | "table" | "calendar" | "matrix"
+    shell         "list" | "kanban" | "table" | "calendar" | "matrix" | "stepped_form"
     card_fields   [str]  metadata keys shown on kanban cards
     list_columns  [str]  table shell columns: built-ins or "metadata.<key>"
     date_field    str    calendar shell date source: "created_at" or a metadata key
@@ -23,7 +23,7 @@ Recognised keys:
                   per-workflow detail-page configuration
 """
 
-VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix")
+VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix", "stepped_form")
 
 TABLE_BUILTIN_COLUMNS = ("reference", "state", "sla", "status", "created")
 

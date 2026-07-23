@@ -117,7 +117,7 @@ class WorkspaceView(generics.GenericAPIView):
                 ("font", {"inter", "system", "serif", "mono"}),
                 ("date_format", {"locale", "dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"}),
                 # VISION Layer 1: workspace-wide fallback shell, UI density, language
-                ("default_view", {"list", "kanban", "table", "calendar", "matrix"}),
+                ("default_view", {"list", "kanban", "table", "calendar", "matrix", "stepped_form"}),
                 ("density", {"comfortable", "compact"}),
                 ("locale", {"en-GB", "es-ES"}),
             ):

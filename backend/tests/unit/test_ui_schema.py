@@ -8,6 +8,10 @@ def test_matrix_shell_is_valid():
     assert validate_ui_schema({"shell": "matrix"}) is None
 
 
+def test_stepped_form_shell_is_valid():
+    assert validate_ui_schema({"shell": "stepped_form"}) is None
+
+
 def test_unknown_shell_rejected():
     err = validate_ui_schema({"shell": "gantt"})
     assert err and "gantt" in err and "matrix" in err

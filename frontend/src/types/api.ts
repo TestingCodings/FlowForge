@@ -53,7 +53,7 @@ export interface Rule {
   priority: number;
 }
 
-export type ShellName = "list" | "kanban" | "table" | "calendar" | "matrix";
+export type ShellName = "list" | "kanban" | "table" | "calendar" | "matrix" | "stepped_form";
 
 export interface ChildrenConfig {
   workflows?: string[];
