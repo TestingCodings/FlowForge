@@ -65,16 +65,45 @@ def validate_transition(instance, transition_id):
     return TransitionResult(transition=transition, actions=actions)
 
 
-@transaction.atomic
 def perform_transition(instance, transition_id):
+    """
+    Pre-flight (no transaction): validate rules + required forms, then run
+    `before` action hooks — which may call external systems and can block the
+    transition (docs/HOOKS.md Part 2). Then commit atomically, re-checking
+    under a row lock that the instance hasn't moved since pre-flight so a
+    concurrent transition can't be clobbered.
+    """
+    from apps.instances.models import WorkflowInstance
+
     result = validate_transition(instance, transition_id)
 
-    update_fields = ["current_state", "updated_at"]
+    # `before` hooks run outside the transaction so their network calls don't
+    # hold a DB transaction open. Deferred import avoids an engine↔hooks cycle.
+    from apps.notifications.hooks import run_before_hooks
+    metadata_deltas = run_before_hooks(instance, result.transition)
+
+    with transaction.atomic():
+        locked = WorkflowInstance.objects.select_for_update().get(pk=instance.pk)
+        if locked.current_state_id != result.transition.from_state_id:
+            raise WorkflowTransitionError(
+                "Instance changed state during processing; please retry the transition."
+            )
+
+        update_fields = ["current_state", "updated_at"]
+        locked.current_state = result.transition.to_state
+        if metadata_deltas:
+            merged = dict(locked.metadata_json or {})
+            merged.update(metadata_deltas)
+            locked.metadata_json = merged
+            update_fields.append("metadata_json")
+        if result.transition.to_state.is_terminal and locked.completed_at is None:
+            locked.completed_at = timezone.now()
+            update_fields.append("completed_at")
+        locked.save(update_fields=update_fields)
+
+    # Keep the caller's instance in sync with what was committed.
     instance.current_state = result.transition.to_state
-
-    if result.transition.to_state.is_terminal and instance.completed_at is None:
-        instance.completed_at = timezone.now()
-        update_fields.append("completed_at")
-
-    instance.save(update_fields=update_fields)
+    instance.current_state_id = result.transition.to_state_id
+    instance.metadata_json = locked.metadata_json
+    instance.completed_at = locked.completed_at
     return result

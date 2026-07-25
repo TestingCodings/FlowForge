@@ -137,7 +137,7 @@ def test_run_after_hooks_queues_only_active_after(keyed, wf):
 # ── management API ──
 
 @pytest.mark.django_db
-def test_hook_api_rejects_before_and_requires_url(db):
+def test_hook_api_validation(db):
     designer = User.objects.create_user(email="w@e.com", password="StrongPass123!", first_name="W", last_name="D")
     UserRole.objects.create(user=designer, role=Role.objects.create(name=RoleName.WORKFLOW_DESIGNER))
     w = WorkflowDefinition.objects.create(name="W", created_by=designer)
@@ -150,15 +150,97 @@ def test_hook_api_rejects_before_and_requires_url(db):
     login = client.post("/api/auth/login/", {"email": designer.email, "password": "StrongPass123!"}, format="json")
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
 
-    # before is not enabled yet
-    r1 = client.post("/api/hooks/", {"transition": str(tr.id), "trigger": "before",
+    # before hooks are valid now
+    r1 = client.post("/api/hooks/", {"transition": str(tr.id), "trigger": "before", "on_failure": "block",
+                                     "action": "probe", "config": {"url": "https://x.example.com"}}, format="json")
+    assert r1.status_code == 201
+    # block only makes sense on a before hook
+    r2 = client.post("/api/hooks/", {"transition": str(tr.id), "trigger": "after", "on_failure": "block",
                                      "action": "http_request", "config": {"url": "https://x.example.com"}}, format="json")
-    assert r1.status_code == 400
-    # missing url
-    r2 = client.post("/api/hooks/", {"transition": str(tr.id), "trigger": "after",
-                                     "action": "http_request", "config": {}}, format="json")
     assert r2.status_code == 400
-    # valid
+    # missing url
     r3 = client.post("/api/hooks/", {"transition": str(tr.id), "trigger": "after",
-                                     "action": "http_request", "config": {"url": "https://x.example.com"}}, format="json")
-    assert r3.status_code == 201
+                                     "action": "http_request", "config": {}}, format="json")
+    assert r3.status_code == 400
+
+
+# ── before hooks (gating, via the engine) ──
+
+@pytest.mark.django_db
+def test_before_hook_block_aborts_transition(keyed, wf):
+    from apps.workflows.engine import perform_transition, WorkflowTransitionError
+    w, tr, inst, user = wf
+    TransitionHook.objects.create(
+        transition=tr, trigger="before", action="probe", on_failure="block",
+        config={"url": "https://health.example.com", "expect_status": 200}, created_by=user,
+    )
+    fake = MagicMock(status_code=503, text="down")
+    fake.raise_for_status.return_value = None
+    with patch("apps.notifications.hooks.httpx.request", return_value=fake), \
+         patch("apps.notifications.hooks.assert_safe_url"):
+        with pytest.raises(WorkflowTransitionError, match="Blocked by hook"):
+            perform_transition(inst, tr.id)
+    inst.refresh_from_db()
+    assert inst.current_state_id == tr.from_state_id  # unchanged
+
+
+@pytest.mark.django_db
+def test_before_hook_warn_proceeds(keyed, wf):
+    from apps.workflows.engine import perform_transition
+    w, tr, inst, user = wf
+    TransitionHook.objects.create(
+        transition=tr, trigger="before", action="probe", on_failure="warn",
+        config={"url": "https://health.example.com", "expect_status": 200}, created_by=user,
+    )
+    fake = MagicMock(status_code=503, text="down")
+    fake.raise_for_status.return_value = None
+    with patch("apps.notifications.hooks.httpx.request", return_value=fake), \
+         patch("apps.notifications.hooks.assert_safe_url"):
+        perform_transition(inst, tr.id)  # does not raise
+    inst.refresh_from_db()
+    assert inst.current_state_id == tr.to_state_id  # advanced despite the failure
+    assert HookExecutionLog.objects.filter(hook__transition=tr, status="failed").exists()
+
+
+@pytest.mark.django_db
+def test_before_hook_success_writes_output_and_advances(keyed, wf):
+    from apps.workflows.engine import perform_transition
+    w, tr, inst, user = wf
+    TransitionHook.objects.create(
+        transition=tr, trigger="before", action="http_request", on_failure="block",
+        config={"url": "https://provision.example.com"}, output_to="metadata.device_id", created_by=user,
+    )
+    fake = MagicMock(status_code=200, text='{"device_id": "dev-9"}')
+    fake.json.return_value = {"device_id": "dev-9"}
+    fake.raise_for_status.return_value = None
+    with patch("apps.notifications.hooks.httpx.request", return_value=fake), \
+         patch("apps.notifications.hooks.assert_safe_url"):
+        perform_transition(inst, tr.id)
+    inst.refresh_from_db()
+    assert inst.current_state_id == tr.to_state_id
+    assert inst.metadata_json["device_id"] == {"device_id": "dev-9"}
+
+
+@pytest.mark.django_db
+def test_transition_rechecks_state_under_lock(keyed, wf):
+    """If the instance moves between pre-flight and commit, the transition aborts."""
+    from apps.workflows.engine import perform_transition, WorkflowTransitionError
+    w, tr, inst, user = wf
+
+    # A before-hook whose side effect is to advance the instance out from under
+    # the transition — simulating a concurrent move during pre-flight.
+    def sneaky(*a, **k):
+        WorkflowInstance.objects.filter(pk=inst.pk).update(current_state=tr.to_state_id)
+        m = MagicMock(status_code=200, text="{}")
+        m.json.return_value = {}
+        m.raise_for_status.return_value = None
+        return m
+
+    TransitionHook.objects.create(
+        transition=tr, trigger="before", action="probe", on_failure="block",
+        config={"url": "https://x.example.com"}, created_by=user,
+    )
+    with patch("apps.notifications.hooks.httpx.request", side_effect=sneaky), \
+         patch("apps.notifications.hooks.assert_safe_url"):
+        with pytest.raises(WorkflowTransitionError, match="changed state during processing"):
+            perform_transition(inst, tr.id)

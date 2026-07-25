@@ -87,10 +87,11 @@ class TransitionHookSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         trigger = attrs.get("trigger") or getattr(self.instance, "trigger", None)
-        if trigger == TransitionHook.Trigger.BEFORE:
-            raise serializers.ValidationError(
-                "before hooks are not enabled yet; use trigger=after."
-            )
+        on_failure = attrs.get("on_failure") or getattr(self.instance, "on_failure", None)
+        # `block` only makes sense before the state changes; an after-hook
+        # can't un-commit a transition.
+        if on_failure == TransitionHook.OnFailure.BLOCK and trigger != TransitionHook.Trigger.BEFORE:
+            raise serializers.ValidationError("on_failure=block requires trigger=before.")
         cfg = attrs.get("config") or getattr(self.instance, "config", {}) or {}
         if not cfg.get("url"):
             raise serializers.ValidationError("config.url is required.")

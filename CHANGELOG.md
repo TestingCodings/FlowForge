@@ -7,6 +7,16 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Action hooks — `before` (gating) hooks** (docs/HOOKS.md step 4, completing
+  the feature). `before` hooks run synchronously ahead of the state change and
+  can **block** a transition (on_failure=block) — a health-check gate — while
+  warn/ignore proceed. `perform_transition` was restructured: validation +
+  before-hooks run pre-transaction (so their network calls don't hold a DB
+  transaction open), then an atomic block re-checks the instance's state under
+  `select_for_update` and aborts with a clear error if it moved concurrently.
+  Successful before-hooks can still write `output_to` metadata. They reuse the
+  rules-service circuit breaker so a flapping dependency fast-fails. Full
+  suite 227 passed; verified live (a blocking probe kept an instance in place).
 - **Action hooks — `after` + outbound safety** (docs/HOOKS.md steps 2–3). A
   `TransitionHook` fires when a transition commits: it calls an external system
   (`http_request` or `probe`), with `{{secret.NAME}}` / `{{metadata.key}}` /

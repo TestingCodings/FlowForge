@@ -15,13 +15,14 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [transition, setTransition] = useState("");
+  const [trigger, setTrigger] = useState<"before" | "after">("after");
   const [action, setAction] = useState<"http_request" | "probe">("http_request");
   const [url, setUrl] = useState("");
   const [method, setMethod] = useState("POST");
   const [headersText, setHeadersText] = useState("");
   const [bodyTemplate, setBodyTemplate] = useState("");
   const [outputTo, setOutputTo] = useState("");
-  const [onFailure, setOnFailure] = useState<"warn" | "ignore">("warn");
+  const [onFailure, setOnFailure] = useState<"block" | "warn" | "ignore">("warn");
   const [err, setErr] = useState<string | null>(null);
 
   const transitionIds = transitions.map((t) => t.id);
@@ -47,7 +48,7 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
         if (i > 0) headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
       }
       return (await apiClient.post("/hooks/", {
-        transition, trigger: "after", action,
+        transition, trigger, action,
         config: {
           url: url.trim(),
           ...(action === "http_request" ? { method, body_template: bodyTemplate, headers } : {}),
@@ -90,12 +91,23 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
 
       {showForm && (
         <div style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>On transition</label>
               <select value={transition} onChange={(e) => setTransition(e.target.value)}>
                 <option value="">Select…</option>
                 {transitions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>When <Hint tip="Before = runs and can block the transition (e.g. a health check gate). After = fires once the transition commits." /></label>
+              <select value={trigger} onChange={(e) => {
+                const v = e.target.value as "before" | "after";
+                setTrigger(v);
+                if (v === "after" && onFailure === "block") setOnFailure("warn");
+              }}>
+                <option value="after">After (fires on commit)</option>
+                <option value="before">Before (can gate)</option>
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -108,6 +120,7 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>On failure</label>
               <select value={onFailure} onChange={(e) => setOnFailure(e.target.value as any)}>
+                {trigger === "before" && <option value="block">Block the transition</option>}
                 <option value="warn">Warn but proceed</option>
                 <option value="ignore">Ignore</option>
               </select>
@@ -150,7 +163,9 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
             {addHook.isPending ? "Adding…" : "Add hook"}
           </button>
           <div className="text-xs text-muted" style={{ marginTop: 8 }}>
-            Fires <strong>after</strong> the transition commits. Before-hooks (gating) are coming next.
+            {trigger === "before"
+              ? "Runs before the state changes; a blocking hook aborts the transition if it fails."
+              : "Fires after the transition commits; retried on failure."}
           </div>
         </div>
       )}
@@ -167,7 +182,13 @@ export default function HooksPanel({ transitions, canEdit }: Props) {
           <tbody>
             {hooks.map((h) => (
               <tr key={h.id} style={{ opacity: h.is_active ? 1 : 0.5 }}>
-                <td style={{ fontWeight: 600 }}>{h.transition_name}</td>
+                <td style={{ fontWeight: 600 }}>
+                  {h.transition_name}
+                  <span className="badge badge-inactive" style={{ fontSize: "0.6rem", marginLeft: 6 }}>{h.trigger}</span>
+                  {h.trigger === "before" && h.on_failure === "block" && (
+                    <span className="badge badge-pending" style={{ fontSize: "0.6rem", marginLeft: 4 }}>gate</span>
+                  )}
+                </td>
                 <td><span className="badge badge-initial" style={{ fontSize: "0.65rem" }}>{h.action === "probe" ? "probe" : h.config.method ?? "POST"}</span></td>
                 <td style={{ fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.config.url}</td>
                 <td className="text-xs text-muted">{h.output_to || "—"}</td>
