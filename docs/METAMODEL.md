@@ -88,7 +88,7 @@ timeout; `after` hooks queue.
   first, which cover most needs.
 
 **Effort:** 3–4 weeks incl. the secret store. Ship `http_request` + `probe`
-first; `script` later behind a sandbox.
+first; `script` later behind a sandbox. **Full design:** [HOOKS.md](HOOKS.md).
 
 ---
 
