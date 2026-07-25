@@ -15,7 +15,7 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 
 | WS | Status | Owner |
 |----|--------|-------|
-| WS-A media backend | unclaimed | — |
+| WS-A media backend | **in progress** | Copilot |
 | WS-B media frontend | blocked on WS-A | — |
 | WS-C computed-in-shells | unclaimed | — |
 | WS-D parallel states | hold (engine-exclusive) | — |

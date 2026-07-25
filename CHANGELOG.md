@@ -7,6 +7,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **WS-A — File & image uploads (backend)** — new `apps/media/` Django app
+  (`ff_media` label) with `MediaAsset` model; authenticated multipart upload,
+  list, retrieve, download (streamed through a gated view — never a public URL),
+  and delete endpoints at `/api/media/`; server-side magic-byte type allow-list
+  (JPEG, PNG, GIF, WebP, PDF, ZIP/DOCX) and configurable size limit; Pillow
+  re-encoding strips EXIF from every uploaded image; UUID-keyed storage paths
+  generated server-side so original filenames are never used as storage keys;
+  `django-storages` / R2 swap documented in settings (one-line config change,
+  no model migration); role-checked (participant+ upload, viewer+ list/download,
+  uploader-or-designer+ delete); 38 focused tests (upload, list, download,
+  delete, auth/role checks, oversize, wrong-type, generated-key, EXIF strip,
+  private-by-default). Adds Pillow 12.3.0 (re-added after WS-F removal).
 - **CI hardening (WS-F)** — a standalone frontend-build job (tsc -b + vite,
   ~2-minute type gate) and an enforced dependency-vulnerability job
   (pip-audit on backend requirements, npm audit at high+ on the frontend).

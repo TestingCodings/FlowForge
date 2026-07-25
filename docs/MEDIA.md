@@ -4,8 +4,7 @@ Uploading and embedding images (and other files), and the larger ambition it
 unlocks: **visual-novel / narrative-game authoring** inside FlowForge, to a
 level comparable with Ren'Py or a Unity 2D scene flow.
 
-Status: design only. Nothing here is built. Sequenced after the meta-model
-work (topology, hooks, computed fields — all shipped).
+Status: **Part 1 (backend) implemented** (WS-A). Part 2 (visual-novel shell, WS-I) is pending WS-B (frontend attachments panel).
 
 ---
 

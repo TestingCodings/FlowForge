@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.notifications",
     "apps.secrets",
+    # WS-A — file & image uploads
+    "apps.media",
 ]
 
 MIDDLEWARE = [
@@ -95,6 +97,31 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+# ── Media uploads (WS-A) ────────────────────────────────────────────────────
+# Local dev: files land in MEDIA_ROOT on disk (no cloud credentials needed).
+# Production / R2 swap: override STORAGES['default'] in your environment
+# settings to use django-storages S3Boto3Storage pointed at Cloudflare R2:
+#
+#   STORAGES["default"] = {
+#       "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+#       "OPTIONS": {
+#           "bucket_name": env("R2_BUCKET_NAME"),
+#           "endpoint_url": env("R2_ENDPOINT_URL"),
+#           "access_key": env("R2_ACCESS_KEY_ID"),
+#           "secret_key": env("R2_SECRET_ACCESS_KEY"),
+#           "default_acl": None,          # private by default (R2 has no ACLs)
+#           "querystring_auth": True,     # signed URLs for temporary access
+#           "file_overwrite": False,
+#       },
+#   }
+#
+# No model change required — FileField uses DEFAULT_FILE_STORAGE automatically.
+MEDIA_ROOT = BASE_DIR / "media_uploads"
+MEDIA_URL = "/media/"          # only used in local dev; not served in production
+
+# Maximum single-file upload size (bytes).  Override per environment.
+MEDIA_UPLOAD_MAX_BYTES = 20 * 1024 * 1024  # 20 MiB
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

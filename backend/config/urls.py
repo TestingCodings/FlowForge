@@ -18,6 +18,7 @@ from apps.notifications.views import (
 )
 from apps.tasks.views import TaskViewSet
 from apps.workflows.views import WorkflowDefinitionViewSet, RuleViewSet, StateViewSet, TransitionViewSet
+from apps.media.views import MediaAssetViewSet
 from .health import health_check
 
 router = DefaultRouter()
@@ -37,6 +38,7 @@ router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
 router.register(r"triggers", TriggerViewSet, basename="trigger")
 router.register(r"secrets", SecretViewSet, basename="secret")
 router.register(r"hooks", TransitionHookViewSet, basename="hook")
+router.register(r"media", MediaAssetViewSet, basename="media")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
