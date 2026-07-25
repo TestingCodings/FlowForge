@@ -107,7 +107,11 @@ and the CV links the demo rather than the repo.
 3. **Secrets**: write `backend/.env` on the server —
    `DJANGO_SECRET_KEY` (fresh), `DJANGO_ALLOWED_HOSTS`, `DATABASE_URL`,
    `REDIS_URL`, `CORS_ALLOWED_ORIGINS=https://flowforge.cortexa.solutions`,
-   `DJANGO_SETTINGS_MODULE=config.settings.demo`. Never committed.
+   `DJANGO_SETTINGS_MODULE=config.settings.demo`, and
+   `SECRETS_ENCRYPTION_KEY_V1` (the secret-store Fernet key — generate with
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`;
+   without it the secret store fails closed and action hooks can't run).
+   Never committed.
 4. **Frontend build**: `npm ci && npm run build` (in CI or on the VPS),
    output mounted into Caddy.
 5. `docker compose -f docker-compose.prod.yml up -d` → migrate runs on
