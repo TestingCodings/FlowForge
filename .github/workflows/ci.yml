@@ -7,6 +7,61 @@ on:
     branches: [main, develop]
 
 jobs:
+  # Fast, standalone frontend compile gate. Runs `tsc -b` via the build, so
+  # strict-mode type errors fail here in ~2 minutes instead of surfacing (or
+  # hiding) inside the much slower e2e job.
+  frontend-build:
+    name: Frontend build (tsc -b + vite)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # Dependency vulnerability gates. Baselines are clean as of 2026-07 (Django
+  # 5.2 LTS, cryptography 48, simplejwt 5.5, pytest 9), so these enforce.
+  security-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit backend dependencies (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --no-deps
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Audit frontend dependencies (npm audit, high+)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
   test:
     name: Run test suite
     runs-on: ubuntu-latest

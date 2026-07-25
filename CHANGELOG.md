@@ -7,6 +7,17 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **CI hardening (WS-F)** — a standalone frontend-build job (tsc -b + vite,
+  ~2-minute type gate) and an enforced dependency-vulnerability job
+  (pip-audit on backend requirements, npm audit at high+ on the frontend).
+
+### Changed
+- **Security dependency bumps** to make the audit gate enforceable: Django
+  5.0.6 → 5.2.16 LTS (~20 advisories), DRF 3.16.1, simplejwt 5.5.1
+  (PYSEC-2026-1305), cryptography 48.0.1 (secret-store relevant), pytest 9 +
+  plugins; unused Pillow removed (MEDIA.md re-adds it when uploads land).
+  Migrated the removed STATICFILES_STORAGE setting to STORAGES (silently
+  ignored since Django 5.1). Full suite green on the new stack.
 - **Computed fields** (docs/METAMODEL.md §2) — derived, read-only values
   defined per workflow in `ui_schema.computed`: rollups over children
   (`sum`/`min`/`max`/`avg`/`count`), `age_days`, and `if` conditionals, reusing
