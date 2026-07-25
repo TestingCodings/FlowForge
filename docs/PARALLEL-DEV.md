@@ -5,6 +5,26 @@ concurrently to speed development. Each names the files it owns, the contracts
 it must not break, and its acceptance criteria. Hand one workstream to one
 agent; they should not overlap in the files they edit.
 
+## Workstream board (claim before starting!)
+
+**Check this table AND open PRs before picking up a workstream.** Claim by
+PR-ing a one-line status change here (or commenting on an issue). Two agents
+building the same workstream wastes both runs — this happened with WS-F
+(Copilot PR #2 duplicated work already merged on main; its
+permissions-hardening idea was adopted, the rest closed as duplicate).
+
+| WS | Status | Owner |
+|----|--------|-------|
+| WS-A media backend | unclaimed | — |
+| WS-B media frontend | blocked on WS-A | — |
+| WS-C computed-in-shells | unclaimed | — |
+| WS-D parallel states | hold (engine-exclusive) | — |
+| WS-E E2E @core | **in progress** | Claude (main session) |
+| WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |
+| WS-G i18n breadth | unclaimed | — |
+| WS-H demo deployment | unclaimed | — |
+| WS-I scene shell | blocked on WS-A/B | — |
+
 ## How to use this
 - **One agent per workstream.** Branch per workstream (`feat/<id>-<slug>`),
   PR into `main`.

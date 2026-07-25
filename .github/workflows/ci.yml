@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Least-privilege GITHUB_TOKEN for every job (adopted from Copilot PR #2).
+permissions:
+  contents: read
+
 jobs:
   # Fast, standalone frontend compile gate. Runs `tsc -b` via the build, so
   # strict-mode type errors fail here in ~2 minutes instead of surfacing (or
