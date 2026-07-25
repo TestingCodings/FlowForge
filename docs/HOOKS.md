@@ -204,8 +204,8 @@ one.
 | Step | Scope | Effort |
 |------|-------|--------|
 | 1 | **Secret store** — model, Fernet encryption + key versioning, write-only API, redaction helper, tests | 1–1.5 wk |
-| 2 | **Shared `outbound.py`** — extract the SSRF guard from webhooks; add config templating + secret resolution | 3–4 days |
-| 3 | **`after` hooks** — model + HookExecutionLog, reuse webhook delivery, `output_to`, admin/replay | 1 wk |
+| 2 ✅ | **Shared `outbound.py`** — extract the SSRF guard from webhooks; add config templating + secret resolution | 3–4 days |
+| 3 ✅ | **`after` hooks** — model + HookExecutionLog, reuse webhook delivery, `output_to`, admin/replay | 1 wk |
 | 4 | **`before` hooks** — the pre-flight/commit/post-commit restructure of `perform_transition`, circuit breaker, `block`/`warn`/`ignore` | 1.5–2 wk |
 
 Total ≈ 4–5 weeks. Steps 1–3 are additive and low-risk (nothing touches the

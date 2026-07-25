@@ -194,6 +194,8 @@ class TriggerFireView(APIView):
                 "to_state": instance.current_state.name,
             },
         )
+        from apps.notifications.hooks import run_after_hooks
+        run_after_hooks(instance, result.transition)
         return Response({
             "detail": "Transition fired.",
             "instance": instance.reference_number,

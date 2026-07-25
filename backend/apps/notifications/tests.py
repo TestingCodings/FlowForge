@@ -124,6 +124,8 @@ def test_webhook_subscription_fires_with_signature(setup_context, monkeypatch):
 
     import apps.notifications.tasks as tasks_module
     monkeypatch.setattr(tasks_module.httpx, "post", fake_post)
+    # Delivery-logic test — bypass the SSRF guard's real DNS lookup on the fake host.
+    monkeypatch.setattr("apps.notifications.outbound.assert_safe_url", lambda url: None)
 
     # Create a delivery log and deliver it directly
     delivery_log = WebhookDeliveryLog.objects.create(
@@ -205,6 +207,7 @@ def test_webhook_failure_is_recorded_not_raised(setup_context, monkeypatch):
 
     # Now simulate delivery failure
     delivery_log = logs[0]
+    monkeypatch.setattr("apps.notifications.outbound.assert_safe_url", lambda url: None)
     monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("connection refused")))
 
     try:
@@ -342,6 +345,7 @@ def test_webhook_delivery_task_success(setup_context, monkeypatch):
     fake_response.status_code = 200
 
     import apps.notifications.tasks as tasks_module
+    monkeypatch.setattr("apps.notifications.outbound.assert_safe_url", lambda url: None)
     monkeypatch.setattr(tasks_module.httpx, "post", lambda *a, **k: fake_response)
 
     _deliver_webhook_impl(str(delivery_log.id))

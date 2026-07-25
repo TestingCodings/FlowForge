@@ -13,6 +13,7 @@ from apps.secrets.views import SecretViewSet
 from apps.notifications.views import (
     NotificationLogViewSet,
     NotificationTemplateViewSet,
+    TransitionHookViewSet,
     WebhookSubscriptionViewSet,
 )
 from apps.tasks.views import TaskViewSet
@@ -35,6 +36,7 @@ router.register(r"notification-logs", NotificationLogViewSet, basename="notifica
 router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
 router.register(r"triggers", TriggerViewSet, basename="trigger")
 router.register(r"secrets", SecretViewSet, basename="secret")
+router.register(r"hooks", TransitionHookViewSet, basename="hook")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

@@ -163,3 +163,86 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.channel} {self.status}"
+
+
+class TransitionHook(models.Model):
+    """
+    An action hook on a transition (docs/HOOKS.md Part 2).
+
+    `after` hooks fire once a transition has committed — they call an external
+    system asynchronously (reusing the webhook delivery machinery) and can
+    write the response back into instance metadata via `output_to`. `before`
+    hooks (gating, synchronous) are a later step; the field is here so the
+    model is stable.
+    """
+
+    class Trigger(models.TextChoices):
+        BEFORE = "before", "Before (gates the transition)"
+        AFTER = "after", "After (fires once committed)"
+
+    class Action(models.TextChoices):
+        HTTP_REQUEST = "http_request", "HTTP request"
+        PROBE = "probe", "Probe (GET, assert reachable)"
+
+    class OnFailure(models.TextChoices):
+        BLOCK = "block", "Block the transition"
+        WARN = "warn", "Warn but proceed"
+        IGNORE = "ignore", "Ignore"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transition = models.ForeignKey(
+        "workflows.Transition", on_delete=models.CASCADE, related_name="hooks"
+    )
+    trigger = models.CharField(max_length=10, choices=Trigger.choices, default=Trigger.AFTER)
+    action = models.CharField(max_length=20, choices=Action.choices, default=Action.HTTP_REQUEST)
+    # {url, method, headers: {k:v}, body_template: str, timeout: int, expect_status: int}
+    config = models.JSONField(default=dict)
+    on_failure = models.CharField(max_length=10, choices=OnFailure.choices, default=OnFailure.WARN)
+    # "metadata.<key>" — where the response (or a json path of it) is written.
+    output_to = models.CharField(max_length=100, blank=True)
+    order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="created_hooks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "transition_hook"
+        ordering = ["transition_id", "order", "created_at"]
+
+    def __str__(self):
+        return f"{self.trigger} {self.action} on {self.transition_id}"
+
+
+class HookExecutionLog(models.Model):
+    """One execution of a TransitionHook — observability + replay (mirrors WebhookDeliveryLog)."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed (Retrying)"
+        DEAD_LETTER = "dead_letter", "Dead Letter"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hook = models.ForeignKey(TransitionHook, on_delete=models.CASCADE, related_name="executions")
+    workflow_instance = models.ForeignKey(
+        WorkflowInstance, on_delete=models.CASCADE, related_name="hook_executions"
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    attempt = models.PositiveSmallIntegerField(default=0)
+    http_status_code = models.PositiveIntegerField(null=True, blank=True)
+    # Request/response are redacted of any secret values before saving.
+    request_summary = models.TextField(blank=True)
+    response_summary = models.TextField(blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "hook_execution_log"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.hook_id} {self.status}"

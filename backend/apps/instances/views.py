@@ -100,6 +100,9 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
                 "recipient_email": request.user.email,
             },
         )
+        # Fire post-commit `after` action hooks on this transition.
+        from apps.notifications.hooks import run_after_hooks
+        run_after_hooks(instance, result.transition)
         return result, None
 
     @action(detail=True, methods=["post"], url_path="transition")

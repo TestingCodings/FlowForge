@@ -52,6 +52,10 @@ def _deliver_webhook_impl(delivery_log_id: str):
         headers["X-FlowForge-Signature"] = sign_payload(sub.secret, body)
 
     try:
+        # SSRF guard: the URL is user-defined, so validate it resolves to a
+        # public address before every send (DNS can change between sends).
+        from .outbound import assert_safe_url
+        assert_safe_url(sub.url)
         response = httpx.post(sub.url, content=body, headers=headers, timeout=5)
         response.raise_for_status()
 

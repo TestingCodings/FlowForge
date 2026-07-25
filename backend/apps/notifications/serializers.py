@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import EventTrigger, NotificationLog, NotificationTemplate, WebhookSubscription
+from .models import TransitionHook
 
 
 class WebhookSubscriptionSerializer(serializers.ModelSerializer):
@@ -69,3 +70,28 @@ class NotificationLogSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class TransitionHookSerializer(serializers.ModelSerializer):
+    transition_name = serializers.CharField(source="transition.name", read_only=True)
+    execution_count = serializers.IntegerField(source="executions.count", read_only=True)
+
+    class Meta:
+        model = TransitionHook
+        fields = (
+            "id", "transition", "transition_name", "trigger", "action",
+            "config", "on_failure", "output_to", "order", "is_active",
+            "created_at", "execution_count",
+        )
+        read_only_fields = ("id", "created_at")
+
+    def validate(self, attrs):
+        trigger = attrs.get("trigger") or getattr(self.instance, "trigger", None)
+        if trigger == TransitionHook.Trigger.BEFORE:
+            raise serializers.ValidationError(
+                "before hooks are not enabled yet; use trigger=after."
+            )
+        cfg = attrs.get("config") or getattr(self.instance, "config", {}) or {}
+        if not cfg.get("url"):
+            raise serializers.ValidationError("config.url is required.")
+        return attrs

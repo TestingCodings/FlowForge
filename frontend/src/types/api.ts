@@ -309,3 +309,26 @@ export interface Trigger {
   last_triggered_at: string | null;
   trigger_count: number;
 }
+
+/** Action hook on a transition (outbound integration) — /api/hooks/ */
+export interface TransitionHook {
+  id: string;
+  transition: string;
+  transition_name: string;
+  trigger: "before" | "after";
+  action: "http_request" | "probe";
+  config: {
+    url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body_template?: string;
+    timeout?: number;
+    expect_status?: number;
+  };
+  on_failure: "block" | "warn" | "ignore";
+  output_to: string;
+  order: number;
+  is_active: boolean;
+  created_at: string;
+  execution_count: number;
+}

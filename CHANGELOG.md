@@ -7,6 +7,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Action hooks — `after` + outbound safety** (docs/HOOKS.md steps 2–3). A
+  `TransitionHook` fires when a transition commits: it calls an external system
+  (`http_request` or `probe`), with `{{secret.NAME}}` / `{{metadata.key}}` /
+  `{{instance.reference_number}}` templating resolved from the encrypted secret
+  store, and can write the response back into instance metadata via `output_to`
+  (feeding rules/computed fields). Delivery is async with retries + a
+  `HookExecutionLog`, and secret values are redacted from every log. A shared
+  `outbound.py` adds an **SSRF guard** (rejects private/loopback/link-local
+  hosts, optional allow-list) now applied to webhooks too, plus the templating.
+  Managed at `/api/hooks/` (workflow_designer+) with a HooksPanel on the
+  workflow detail page. `before` (gating) hooks are the next step. New
+  `cryptography` use; migration `notifications.0004`.
 - **Secret store** (docs/HOOKS.md Part 1) — encrypted credential storage, the
   prerequisite for action hooks. Values are write-only (the API never returns
   one), encrypted at rest with Fernet under versioned keys (rotatable without

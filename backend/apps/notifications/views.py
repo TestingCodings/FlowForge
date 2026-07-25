@@ -3,10 +3,11 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.permissions import IsPlatformAdmin, IsWorkflowDesigner
 
-from .models import NotificationLog, NotificationTemplate, WebhookSubscription
+from .models import NotificationLog, NotificationTemplate, TransitionHook, WebhookSubscription
 from .serializers import (
     NotificationLogSerializer,
     NotificationTemplateSerializer,
+    TransitionHookSerializer,
     WebhookSubscriptionSerializer,
 )
 
@@ -29,3 +30,13 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     serializer_class = WebhookSubscriptionSerializer
     permission_classes = [IsAuthenticated, IsWorkflowDesigner]
     filterset_fields = ["workflow_definition", "is_active"]
+
+
+class TransitionHookViewSet(viewsets.ModelViewSet):
+    queryset = TransitionHook.objects.select_related("transition").all()
+    serializer_class = TransitionHookSerializer
+    permission_classes = [IsAuthenticated, IsWorkflowDesigner]
+    filterset_fields = ["transition", "trigger", "action", "is_active"]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
