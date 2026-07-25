@@ -81,6 +81,8 @@ jobs:
   backend-security-audit:
     name: Backend dependency audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -127,6 +129,8 @@ jobs:
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -150,6 +154,8 @@ jobs:
   frontend-security-audit:
     name: Frontend dependency audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
