@@ -7,6 +7,7 @@ from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet, Wo
 from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
+from apps.instances.topology import TopologyView
 from apps.notifications.views import (
     NotificationLogViewSet,
     NotificationTemplateViewSet,
@@ -39,6 +40,7 @@ urlpatterns = [
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
     path("api/workspace/", WorkspaceView.as_view(), name="workspace"),
+    path("api/topology/", TopologyView.as_view(), name="topology"),
     path("api/audit/<uuid:instance_id>/", AuditTrailByInstanceView.as_view(), name="audit-by-instance"),
     path("api/", include(router.urls)),
     # Health

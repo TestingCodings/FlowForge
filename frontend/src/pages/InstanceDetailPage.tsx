@@ -310,6 +310,14 @@ export default function InstanceDetailPage() {
           <span className={`badge ${isCompleted ? "badge-terminal" : "badge-active"}`}>
             {isCompleted ? "Completed" : "In Progress"}
           </span>
+          <Link
+            to={`/topology?root=${instance.id}`}
+            className="btn-secondary btn-sm"
+            style={{ textDecoration: "none" }}
+            title="See this instance and everything it connects to on a system map"
+          >
+            View topology
+          </Link>
         </div>
       </div>
 

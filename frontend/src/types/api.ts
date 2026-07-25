@@ -264,3 +264,29 @@ export const ALL_ROLES: { value: RoleName; label: string }[] = [
   { value: "participant",       label: "Participant" },
   { value: "viewer",            label: "Viewer" },
 ];
+
+/** Cross-instance topology (system map) — GET /api/topology/ */
+export interface TopologyNode {
+  id: string;
+  reference: string;
+  workflow: string;
+  workflow_id: string;
+  state: string | null;
+  title: string | null;
+  completed: boolean;
+}
+
+export interface TopologyEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  kind: "relationship" | "containment";
+}
+
+export interface TopologyResponse {
+  root: string | null;
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+  truncated: boolean;
+}

@@ -11,6 +11,7 @@ export const enGB = {
   "nav.administration": "Administration",
   "nav.dashboard": "Dashboard",
   "nav.instances": "Instances",
+  "nav.topology": "Topology",
   "nav.tasks": "My Tasks",
   "nav.workflows": "Workflows",
   "nav.newWorkflow": "New Workflow",

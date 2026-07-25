@@ -10,6 +10,7 @@ export const esES: Catalogue = {
   "nav.administration": "Administración",
   "nav.dashboard": "Panel",
   "nav.instances": "Instancias",
+  "nav.topology": "Topología",
   "nav.tasks": "Mis tareas",
   "nav.workflows": "Flujos de trabajo",
   "nav.newWorkflow": "Nuevo flujo",

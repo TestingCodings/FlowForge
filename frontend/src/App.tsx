@@ -17,6 +17,7 @@ import WorkflowDetailPage from "./pages/WorkflowDetailPage";
 import WorkflowsPage from "./pages/WorkflowsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import WorkflowViewPage from "./pages/WorkflowViewPage";
+import TopologyPage from "./pages/TopologyPage";
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="workflows/:id/view" element={<WorkflowViewPage />} />
         <Route path="workflows/:id/board" element={<WorkflowViewPage />} />
         <Route path="instances" element={<InstancesPage />} />
+        <Route path="topology" element={<TopologyPage />} />
         <Route path="instances/:id" element={<InstanceDetailPage />} />
         <Route path="tasks" element={<DashboardPage />} />
         <Route path="admin/audit" element={<AuditPage />} />

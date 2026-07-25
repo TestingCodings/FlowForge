@@ -7,6 +7,14 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Topology view** (meta-model expansion) — a cross-instance system map.
+  `GET /api/topology/` assembles a graph from existing `InstanceRelationship`
+  links and parent containment (rooted BFS with depth/rel-type filters, or the
+  whole estate, node-capped). A new `/topology` page renders it with React
+  Flow + dagre auto-layout: nodes coloured per workflow, relationship vs.
+  containment edges distinguished, PNG export, and a "View topology" action on
+  each instance to focus the map. First view that crosses workflow boundaries.
+  See [docs/METAMODEL.md](docs/METAMODEL.md).
 - **End-to-end test suite** (Playwright + playwright-bdd) — Gherkin
   `.feature` files under `frontend/e2e/features` document every feature's
   intended flow and are executed as tests, so documentation can't drift.
