@@ -11,7 +11,8 @@ Everything below **widens that meta-model**: after these land, the platform
 can express integrations, derived data, concurrent work, and cross-system
 maps that it cannot today.
 
-Status: planning. Nothing here is built.
+Status (2026-07): topology view, action hooks (incl. secret store + inbound
+triggers), and computed fields are **built**. Parallel states remain planned.
 
 ---
 
@@ -92,7 +93,7 @@ first; `script` later behind a sandbox. **Full design:** [HOOKS.md](HOOKS.md).
 
 ---
 
-## 2. Computed Fields (derived metadata)
+## 2. Computed Fields (derived metadata) ✅ implemented
 
 **What it unlocks:** data that stays correct without manual entry — rollups,
 formulas, and derived status. Today every metadata value is typed by a human
@@ -293,7 +294,7 @@ credentials stored (the caller holds the token).
 | Order | Capability | Why | Effort |
 |-------|-----------|-----|--------|
 | 1 | **Topology view** | Cheapest; no schema/engine change; serves the system-map use case immediately | 1–1.5 wk |
-| 2 | **Computed fields** | Makes containers quantitative; reuses the rule vocabulary; unblocks parallel-state approximation | 2–3 wk |
+| 2 ✅ | **Computed fields** | Makes containers quantitative; reuses the rule vocabulary; unblocks parallel-state approximation | 2–3 wk |
 | 3 | **Action hooks** | Highest capability gain (integrations), but gated on a secret store; the "housed connection" becomes live here | 3–4 wk |
 | 4 | **Parallel states** | Biggest expressiveness gain but touches the engine's core invariant — design last; validate demand for true forking vs. the computed-field approximation | 1 wk (approx) / 4–6 wk (full) |
 

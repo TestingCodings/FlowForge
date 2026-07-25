@@ -49,6 +49,15 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     current_form = serializers.SerializerMethodField()
     parent_reference = serializers.CharField(source="parent.reference_number", read_only=True, default=None)
     children_stats = serializers.SerializerMethodField()
+    computed = serializers.SerializerMethodField()
+
+    def get_computed(self, obj):
+        """Derived read-only fields (docs/METAMODEL.md §2). Detail-only — the
+        rollups query children, so they're skipped on list views to avoid N+1."""
+        if not self._is_detail_request():
+            return {}
+        from apps.workflows.compute import compute_fields
+        return compute_fields(obj)
 
     def get_sla(self, obj):
         if obj.completed_at:
@@ -153,6 +162,7 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
             "parent_reference",
             "child_order",
             "children_stats",
+            "computed",
         )
         read_only_fields = (
             "id",

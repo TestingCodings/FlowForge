@@ -238,6 +238,8 @@ export interface WorkflowInstance {
   parent_reference: string | null;
   child_order: number;
   children_stats: ChildrenStats | null;
+  /** Derived read-only fields (METAMODEL §2); populated on the detail view. */
+  computed?: Record<string, unknown>;
 }
 
 export interface AuditEntry {

@@ -21,6 +21,8 @@ Recognised keys:
                   "parent", or "metadata.<key>"
     instance_view {title_field, panels: [...], layout: "sidebar"|"stacked"}
                   per-workflow detail-page configuration
+    computed      {name: {expr, ...}}  derived read-only fields (METAMODEL §2):
+                  sum/min/max/avg/count over children, age_days, or if
 """
 
 VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix", "stepped_form")
@@ -41,6 +43,8 @@ VALID_PANELS = (
 )
 
 VALID_LAYOUTS = ("sidebar", "stacked")
+
+COMPUTED_EXPRS = ("sum", "min", "max", "avg", "count", "age_days", "if")
 
 
 def _is_str_list(value) -> bool:
@@ -122,6 +126,26 @@ def validate_ui_schema(ui_schema) -> str | None:
                     f"ui_schema.matrix.{axis} must be 'current_state', 'parent', "
                     "or 'metadata.<key>'."
                 )
+
+    computed = ui_schema.get("computed")
+    if computed is not None:
+        if not isinstance(computed, dict):
+            return "ui_schema.computed must be an object keyed by field name."
+        for name, spec in computed.items():
+            if not isinstance(spec, dict):
+                return f"ui_schema.computed['{name}'] must be an object."
+            expr = spec.get("expr")
+            if expr not in COMPUTED_EXPRS:
+                return (
+                    f"ui_schema.computed['{name}'].expr must be one of: "
+                    f"{', '.join(COMPUTED_EXPRS)}."
+                )
+            if expr in ("sum", "min", "max", "avg", "count") and spec.get("over") != "children":
+                return f"ui_schema.computed['{name}'] aggregate requires over='children'."
+            if expr in ("sum", "min", "max", "avg") and not spec.get("field"):
+                return f"ui_schema.computed['{name}'] {expr} requires a 'field'."
+            if expr == "if" and not isinstance(spec.get("cond"), dict):
+                return f"ui_schema.computed['{name}'] if requires a 'cond' object."
 
     instance_view = ui_schema.get("instance_view")
     if instance_view is not None:

@@ -206,5 +206,11 @@ def evaluate_for_transition(instance, transition):
         transition=transition,
     )
     rules = list(scoped_rules) + list(transition_rules)
-    data = {**(instance.metadata_json or {}), **_hierarchy_facts(instance)}
+    # Deferred import: compute.py imports _compare from this module.
+    from .compute import compute_fields
+    data = {
+        **(instance.metadata_json or {}),
+        **_hierarchy_facts(instance),
+        **compute_fields(instance),
+    }
     return evaluate_rules_via_service(rules, data)

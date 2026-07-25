@@ -7,6 +7,13 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Computed fields** (docs/METAMODEL.md §2) — derived, read-only values
+  defined per workflow in `ui_schema.computed`: rollups over children
+  (`sum`/`min`/`max`/`avg`/`count`), `age_days`, and `if` conditionals, reusing
+  the rules operator vocabulary. Resolved at read time (never stored, can't
+  drift), shown on the instance detail page, and injected into the data the
+  rules engine sees — so a rule can gate on a rollup (e.g. block while
+  `total_cost > budget`). Makes containers quantitative. 9 tests.
 - **Action hooks — `before` (gating) hooks** (docs/HOOKS.md step 4, completing
   the feature). `before` hooks run synchronously ahead of the state change and
   can **block** a transition (on_failure=block) — a health-check gate — while

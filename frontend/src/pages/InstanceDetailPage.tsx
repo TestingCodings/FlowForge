@@ -463,6 +463,23 @@ export default function InstanceDetailPage() {
             )}
           </div>
 
+          {/* Computed fields — derived, read-only (METAMODEL §2) */}
+          {instance.computed && Object.keys(instance.computed).length > 0 && (
+            <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+              <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                Computed <Hint tip="Values FlowForge derives automatically from this item and its sub-items (e.g. a total of children). Read-only — they update themselves and rules can use them." />
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {Object.entries(instance.computed).map(([k, v]) => (
+                  <div key={k} style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px" }}>
+                    <div className="text-xs text-muted" style={{ fontFamily: "monospace" }}>{k}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{v === null || v === undefined ? "—" : String(v)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {editingMeta ? (
             <div>
               {/* Editor rows */}
