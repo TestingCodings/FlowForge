@@ -1,8 +1,25 @@
 # Changelog
 
 All notable changes to FlowForge are documented here. The format loosely
-follows [Keep a Changelog](https://keepachangelog.com); versions are
-retrospective milestones rather than published packages.
+follows [Keep a Changelog](https://keepachangelog.com). From v0.9.0 the
+project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING.md).
+
+## [Unreleased]
+
+### Added
+- **End-to-end test suite** (Playwright + playwright-bdd) — Gherkin
+  `.feature` files under `frontend/e2e/features` document every feature's
+  intended flow and are executed as tests, so documentation can't drift.
+  Nine feature areas specified; the `@smoke` slice (auth, dashboard,
+  workflows, instances, builder, shells) is implemented and passing, with
+  `@core`/`@full` steps filled in incrementally. Strategy in
+  [docs/TESTING.md](docs/TESTING.md).
+- **CI e2e job** — boots Postgres/Redis, migrates + seeds, serves the API and
+  a production frontend build, and runs the `@smoke` Playwright tag on every
+  push; uploads the HTML report/traces on failure.
+- **Versioning policy** — SemVer tied to a root `VERSION` file, git tags, and
+  the changelog ([docs/VERSIONING.md](docs/VERSIONING.md)). Project set to
+  `0.9.0`.
 
 ## [0.8.1] — 2026-07-22
 

@@ -65,3 +65,10 @@ backend/dev.sqlite3
 backend/test_db.sqlite3
 backend/create_demo_data.py
 repair_windows_for_docker.ps1
+
+# Playwright / e2e
+frontend/node_modules/
+frontend/.features-gen/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
