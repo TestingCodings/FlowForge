@@ -105,7 +105,7 @@ export default function InstanceDetailPage() {
   const orderedPanels: InstancePanel[] = (instanceView?.panels ?? DEFAULT_PANELS)
     // "description"/"metadata"/"comments" live in the fixed two-column grid
     // above; only the standalone panels participate in ordering.
-    .filter((p): p is InstancePanel => DEFAULT_PANELS.includes(p));
+    .filter((p: InstancePanel): p is InstancePanel => DEFAULT_PANELS.includes(p));
 
   const titleFieldValue = instanceView?.title_field
     ? (instance?.metadata_json ?? {})[instanceView.title_field]

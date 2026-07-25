@@ -13,6 +13,10 @@ export interface StateNodeData {
   requiresTask: boolean;
   defaultRole: string;
   serverId?: string; // set when hydrated from an existing workflow
+  // React Flow's Node<T> constrains T to Record<string, unknown>; this index
+  // signature makes StateNodeData satisfy that so nodes and the `data` casts
+  // type-check under `tsc -b` (strict) without `as unknown` gymnastics.
+  [key: string]: unknown;
 }
 
 export function StateNode({ data, selected }: NodeProps) {
