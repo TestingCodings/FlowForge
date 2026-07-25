@@ -10,14 +10,14 @@ FlowForge is a configurable workflow automation platform that lets teams define 
 
 ## Highlights
 
-- **Model any process, no code** — states, transitions, and a rules engine, authored on a visual React Flow canvas *or* as diffable YAML with a live preview.
-- **Six presentation shells** — the same workflow renders as a list, kanban board (drag-to-transition), table, calendar, TestRail-style matrix, or Typeform-style stepped form, chosen per workflow via `ui_schema`.
-- **White-labelling** — theme presets, light/dark, fonts, date formats, density, and i18n (English + Spanish) per workspace.
-- **Structured data** — per-state forms that gate transitions and feed the rules engine; instance containers (workflows nesting workflows) with roll-up progress.
-- **Governance** — five-tier RBAC enforced at the API layer, an immutable audit trail, and scheduled SLA-breach enforcement.
-- **Integrations, both directions** — HMAC-signed outbound webhooks and inbound triggers (external systems create instances or fire transitions through a secret URL), plus an encrypted secret store.
-- **System map** — a cross-workflow topology view of how instances actually connect, exportable as a PNG.
-- **Production-hardened** — async webhook delivery with retries, optimistic locking, form-schema versioning, a rules-service circuit breaker, and a Playwright + backend test suite gating CI.
+- **Model any process, no code** - states, transitions, and a rules engine, authored on a visual React Flow canvas *or* as diffable YAML with a live preview.
+- **Six presentation shells** - the same workflow renders as a list, kanban board (drag-to-transition), table, calendar, TestRail-style matrix, or Typeform-style stepped form, chosen per workflow via `ui_schema`.
+- **White-labelling** - theme presets, light/dark, fonts, date formats, density, and i18n (English + Spanish) per workspace.
+- **Structured data** - per-state forms that gate transitions and feed the rules engine; instance containers (workflows nesting workflows) with roll-up progress.
+- **Governance** - five-tier RBAC enforced at the API layer, an immutable audit trail, and scheduled SLA-breach enforcement.
+- **Integrations, both directions** - HMAC-signed outbound webhooks and inbound triggers (external systems create instances or fire transitions through a secret URL), plus an encrypted secret store.
+- **System map** - a cross-workflow topology view of how instances actually connect, exportable as a PNG.
+- **Production-hardened** - async webhook delivery with retries, optimistic locking, form-schema versioning, a rules-service circuit breaker, and a Playwright + backend test suite gating CI.
 
 ---
 
@@ -268,7 +268,7 @@ See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs
 
 ## License
 
-[Business Source License 1.1](LICENSE) — source-available.
+[Business Source License 1.1](LICENSE) - source-available.
 
 - **Free** for evaluation, personal, educational, and research use, and for
   internal business use within your own organisation (including running your
