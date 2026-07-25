@@ -129,3 +129,75 @@ class WorkflowInstance(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+def generate_trigger_token():
+    """A long, URL-safe secret; the token in the trigger URL is its credential."""
+    import secrets
+
+    return secrets.token_urlsafe(32)
+
+
+class Trigger(models.Model):
+    """
+    An inbound integration point (VISION meta-model: the world → FlowForge).
+
+    Addressed by a secret token in its own URL. Firing it either creates an
+    instance of the bound workflow or fires a transition on an existing one,
+    always through the engine so rules/approvals/forms still apply.
+    """
+
+    class Action(models.TextChoices):
+        CREATE_INSTANCE = "create_instance", "Create instance"
+        FIRE_TRANSITION = "fire_transition", "Fire transition"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    workflow_definition = models.ForeignKey(
+        WorkflowDefinition, on_delete=models.CASCADE, related_name="triggers"
+    )
+    token = models.CharField(max_length=64, unique=True, default=generate_trigger_token, editable=False)
+    action = models.CharField(max_length=20, choices=Action.choices)
+    # Required when action=fire_transition: the transition to fire.
+    transition = models.ForeignKey(
+        "workflows.Transition", on_delete=models.CASCADE, null=True, blank=True, related_name="triggers"
+    )
+    # How to find the target instance for fire_transition:
+    # "reference_number" or "metadata.<key>". The payload must carry the value.
+    lookup_field = models.CharField(max_length=100, blank=True, default="reference_number")
+    # Maps incoming payload keys → metadata keys, e.g. {"build": "build_number"}.
+    # Empty = copy the whole payload into metadata verbatim.
+    metadata_mapping = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="created_triggers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_triggered_at = models.DateTimeField(null=True, blank=True)
+    trigger_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "trigger"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.action})"
+
+    def clean(self):
+        if self.action == self.Action.FIRE_TRANSITION and not self.transition_id:
+            raise ValidationError("fire_transition triggers require a transition.")
+        if self.transition_id and self.transition.workflow_definition_id != self.workflow_definition_id:
+            raise ValidationError("transition must belong to the trigger's workflow.")
+
+    def apply_mapping(self, payload: dict) -> dict:
+        """Resolve the payload into a metadata dict per metadata_mapping."""
+        if not isinstance(payload, dict):
+            return {}
+        if not self.metadata_mapping:
+            return dict(payload)
+        out = {}
+        for meta_key, payload_key in self.metadata_mapping.items():
+            if payload_key in payload:
+                out[meta_key] = payload[payload_key]
+        return out

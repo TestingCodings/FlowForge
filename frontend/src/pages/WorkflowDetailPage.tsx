@@ -6,6 +6,7 @@ import { Workflow, FormDefinitionApi, FormField } from "../types/api";
 import StateGraph from "../components/StateGraph";
 import Hint from "../components/Hint";
 import WebhooksPanel from "../components/WebhooksPanel";
+import TriggersPanel from "../components/TriggersPanel";
 import PresentationPanel from "../components/PresentationPanel";
 import { formatDate } from "../hooks/useWorkspace";
 
@@ -813,6 +814,8 @@ export default function WorkflowDetailPage() {
       <PresentationPanel workflow={wf} />
 
       {id && <WebhooksPanel workflowId={id} canEdit={true} />}
+
+      {id && <TriggersPanel workflowId={id} transitions={wf.transitions ?? []} canEdit={true} />}
 
       {/* ── Version history ── */}
       {versionHistory.length > 1 && (

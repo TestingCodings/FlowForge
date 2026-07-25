@@ -290,3 +290,22 @@ export interface TopologyResponse {
   edges: TopologyEdge[];
   truncated: boolean;
 }
+
+/** Inbound trigger (world → FlowForge) — GET/POST /api/triggers/ */
+export interface Trigger {
+  id: string;
+  name: string;
+  workflow_definition: string;
+  workflow_name: string;
+  action: "create_instance" | "fire_transition";
+  transition: string | null;
+  transition_name: string | null;
+  lookup_field: string;
+  metadata_mapping: Record<string, string>;
+  is_active: boolean;
+  token: string;
+  fire_path: string;
+  created_at: string;
+  last_triggered_at: string | null;
+  trigger_count: number;
+}

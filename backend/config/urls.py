@@ -8,6 +8,7 @@ from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
 from apps.instances.topology import TopologyView
+from apps.instances.triggers import TriggerViewSet, TriggerFireView
 from apps.notifications.views import (
     NotificationLogViewSet,
     NotificationTemplateViewSet,
@@ -31,6 +32,7 @@ router.register(r"audit", AuditLogAdminViewSet, basename="audit")
 router.register(r"notification-templates", NotificationTemplateViewSet, basename="notification-template")
 router.register(r"notification-logs", NotificationLogViewSet, basename="notification-log")
 router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
+router.register(r"triggers", TriggerViewSet, basename="trigger")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -41,6 +43,7 @@ urlpatterns = [
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
     path("api/workspace/", WorkspaceView.as_view(), name="workspace"),
     path("api/topology/", TopologyView.as_view(), name="topology"),
+    path("api/trigger/<str:token>/", TriggerFireView.as_view(), name="trigger-fire"),
     path("api/audit/<uuid:instance_id>/", AuditTrailByInstanceView.as_view(), name="audit-by-instance"),
     path("api/", include(router.urls)),
     # Health

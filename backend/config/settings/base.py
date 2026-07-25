@@ -98,6 +98,11 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
+    # Inbound trigger fire endpoint (unauthenticated, token-addressed) is
+    # rate-limited per client IP.
+    "DEFAULT_THROTTLE_RATES": {
+        "trigger": "60/min",
+    },
 }
 
 SIMPLE_JWT = {

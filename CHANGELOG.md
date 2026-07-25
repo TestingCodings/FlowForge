@@ -7,6 +7,17 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Inbound triggers** (meta-model expansion) — the inbound counterpart to
+  webhooks: external systems drive FlowForge instead of only being notified.
+  A `Trigger` bound to a workflow is addressed by a secret token in its own
+  URL (`POST /api/trigger/<token>/`, unauthenticated + throttled); firing it
+  either **creates an instance** (payload mapped into metadata) or **fires a
+  transition** on an instance found by reference or metadata key — always
+  through the engine, so rules/approvals/required-form gating still apply and
+  a blocked transition returns its reason. Managed via `/api/triggers/`
+  (workflow_designer+) and a TriggersPanel on the workflow detail page that
+  surfaces the fire URL. Pairs with the topology view: a triggered state
+  change shows up live on the map. See [docs/METAMODEL.md](docs/METAMODEL.md).
 - **Topology view** (meta-model expansion) — a cross-instance system map.
   `GET /api/topology/` assembles a graph from existing `InstanceRelationship`
   links and parent containment (rooted BFS with depth/rel-type filters, or the

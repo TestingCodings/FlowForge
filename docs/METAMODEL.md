@@ -233,6 +233,61 @@ change, reuses React Flow + dagre + PNG export.
 
 ---
 
+## 5. Inbound Triggers (the world → FlowForge)
+
+**What it unlocks:** letting external systems *drive* FlowForge, not just be
+notified by it. Every integration primitive is one cell of a
+direction × timing matrix, and today only one is filled:
+
+| | Synchronous (gates the transition) | Asynchronous (fire and continue) |
+|---|---|---|
+| **Outbound** (FlowForge → world) | Action hooks `before` (§1) | **Webhooks** ✅ built |
+| **Inbound** (world → FlowForge) | Callbacks (deferred) | **Inbound triggers** ← this |
+
+Webhooks made FlowForge *tell* other systems what happened. Inbound triggers
+let other systems tell FlowForge what happened: a CI pipeline finishing marks
+a Test Run passed; a monitoring alert opens an Incident; a git push creates a
+Release. It turns FlowForge from a place people *record* status into a system
+that *reflects reality automatically* — and it pairs directly with the
+topology view, where a triggered state change lights up on the live map.
+
+**Model.** A `Trigger` bound to a workflow, addressed by a secret token in its
+own URL (the token is the credential, like a webhook-receiver URL):
+
+```json
+{
+  "name": "CI marks run passed",
+  "workflow_definition": "<id>",
+  "action": "create_instance | fire_transition",
+  "transition": "<id>",            // for fire_transition
+  "lookup_field": "reference_number | metadata.<key>",   // how to find the instance
+  "metadata_mapping": { "build": "build_number", "suite": "suite" },
+  "is_active": true
+}
+```
+
+- **`create_instance`** — the POST payload creates a new instance of the bound
+  workflow; `metadata_mapping` maps payload fields into `metadata_json`.
+- **`fire_transition`** — finds an existing instance via `lookup_field` +
+  payload and fires the named transition **through the engine**, so rules,
+  approvals, and required-form gating apply exactly as for a human. A blocked
+  transition returns the reason.
+
+**Endpoint.** `POST /api/trigger/<token>/` — unauthenticated (the token is the
+credential), throttled, with a distinct path from the authenticated
+management CRUD at `/api/triggers/`. Every fire is audited (actor = the
+trigger) and bumps `last_triggered_at` / `trigger_count` for observability.
+
+**Why this is the cheapest high-reach primitive.** It's the transition/create
+API you already have, wrapped in a scoped token and a payload mapping. No
+secret store needed (unlike outbound hooks — the token is inbound), no engine
+change (unlike parallel states). It is the single largest increase in what
+*real processes* FlowForge can automate, per unit of work.
+
+**Security.** Long random token in the URL, regeneratable; per-trigger scope
+(one workflow, one action); DRF throttling; inactive triggers 404. No
+credentials stored (the caller holds the token).
+
 ## Recommended sequence
 
 | Order | Capability | Why | Effort |
