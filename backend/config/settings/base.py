@@ -9,6 +9,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = config("DJANGO_SECRET_KEY")
 
+# ── Secret store encryption (docs/HOOKS.md) ──
+# Versioned Fernet keys so secrets can be rotated without downtime. Distinct
+# from DJANGO_SECRET_KEY. Absent = the secret store fails closed (refuses to
+# store) rather than persisting plaintext. Provide via env, e.g.
+#   SECRETS_ENCRYPTION_KEY_V1=<urlsafe-base64 32-byte key>
+# Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+_secret_key_v1 = config("SECRETS_ENCRYPTION_KEY_V1", default="")
+SECRETS_ENCRYPTION_KEYS = {1: _secret_key_v1} if _secret_key_v1 else {}
+SECRETS_ENCRYPTION_KEY_CURRENT = config("SECRETS_ENCRYPTION_KEY_CURRENT", default=1, cast=int)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -29,6 +39,7 @@ INSTALLED_APPS = [
     "apps.tasks",
     "apps.audit",
     "apps.notifications",
+    "apps.secrets",
 ]
 
 MIDDLEWARE = [

@@ -7,6 +7,13 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Secret store** (docs/HOOKS.md Part 1) — encrypted credential storage, the
+  prerequisite for action hooks. Values are write-only (the API never returns
+  one), encrypted at rest with Fernet under versioned keys (rotatable without
+  downtime), and fail closed when no key is configured. `/api/secrets/`
+  (workflow_designer+): create, list (names/metadata only), delete, and rotate;
+  workflow-scoped secrets override workspace-global ones of the same name. New
+  `cryptography` dependency; key via `SECRETS_ENCRYPTION_KEY_V1` env var.
 - **Inbound triggers** (meta-model expansion) — the inbound counterpart to
   webhooks: external systems drive FlowForge instead of only being notified.
   A `Trigger` bound to a workflow is addressed by a secret token in its own

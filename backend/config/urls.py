@@ -9,6 +9,7 @@ from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
 from apps.instances.topology import TopologyView
 from apps.instances.triggers import TriggerViewSet, TriggerFireView
+from apps.secrets.views import SecretViewSet
 from apps.notifications.views import (
     NotificationLogViewSet,
     NotificationTemplateViewSet,
@@ -33,6 +34,7 @@ router.register(r"notification-templates", NotificationTemplateViewSet, basename
 router.register(r"notification-logs", NotificationLogViewSet, basename="notification-log")
 router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
 router.register(r"triggers", TriggerViewSet, basename="trigger")
+router.register(r"secrets", SecretViewSet, basename="secret")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
