@@ -12,7 +12,7 @@ Feature: Visual workflow builder
     Then the canvas shows one state node marked "Start"
     And the toolbar shows the Save, Add State, and Auto-layout controls
 
-  @core
+  @core @wip
   Scenario: Adding a state and connecting a transition
     Given I am in the workflow builder on a fresh canvas
     When I add a new state
@@ -34,7 +34,7 @@ Feature: Visual workflow builder
     When I save the workflow without a name
     Then I see a validation error requiring a workflow name
 
-  @core
+  @core @wip
   Scenario: Saving a valid new workflow
     Given I am in the workflow builder on a fresh canvas
     When I name the workflow "E2E Builder Flow" with prefix "E2E"

@@ -45,15 +45,25 @@ Then("a {string} bundle is downloaded", async ({ page }, ext: string) => {
 });
 
 When("I choose {string}", async ({ page }, label: string) => {
-  await page.getByRole("button", { name: label }).click();
+  // Actions render as buttons or styled links depending on context. Use .or()
+  // so Playwright auto-waits for whichever appears — an eager count() check
+  // races the render and flakes under parallel load.
+  const control = page
+    .getByRole("button", { name: label })
+    .or(page.getByRole("link", { name: label }));
+  await control.first().click();
 });
 
+// The YAML opens in a read-only <textarea>; its content lives in .value, so
+// text-matching locators and innerText() see nothing — use inputValue().
 Then("I see the workflow rendered as YAML text", async ({ page }) => {
-  await expect(page.locator("pre, textarea").filter({ hasText: /workflow:|states:/ }).first()).toBeVisible();
+  const box = page.locator("textarea[readonly]");
+  await expect(box).toBeVisible();
+  expect(await box.inputValue()).toMatch(/workflow:/);
 });
 
 Then("the YAML contains the workflow's states and transitions", async ({ page }) => {
-  const text = await page.locator("pre, textarea").filter({ hasText: /workflow:/ }).first().innerText();
+  const text = await page.locator("textarea[readonly]").inputValue();
   expect(text).toMatch(/states:/);
   expect(text).toMatch(/transitions:/);
 });

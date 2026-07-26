@@ -226,3 +226,19 @@ def test_metadata_update_invalid_if_match_format(setup_context):
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Invalid If-Match format" in response.data["detail"]
+
+
+@pytest.mark.django_db
+def test_cors_preflight_allows_if_match_header(setup_context):
+    """Regression: If-Match is not browser-safelisted, so the optimistic-locking
+    PATCH triggers a CORS preflight. Without `if-match` in the allow-list the
+    browser blocks the request and metadata edits silently fail in the UI."""
+    user, wf, instance = setup_context
+    resp = APIClient().options(
+        f"/api/instances/{instance.id}/metadata/",
+        HTTP_ORIGIN="http://localhost:5173",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="PATCH",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="if-match",
+    )
+    allowed = resp.headers.get("access-control-allow-headers", "").lower()
+    assert "if-match" in allowed

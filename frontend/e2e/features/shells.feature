@@ -13,7 +13,7 @@ Feature: Presentation shells
     Then I see a column for each workflow state
     And each card links to its instance
 
-  @core
+  @core @wip
   Scenario: Dragging a card fires the matching transition
     Given the "Bug Report" workflow uses the "kanban" shell
     And I am viewing its board
@@ -42,7 +42,7 @@ Feature: Presentation shells
     And I filter the list by a reference substring
     Then only matching instances remain
 
-  @core
+  @core @wip
   Scenario: The stepped-form shell walks an instance through its states
     Given the "Insurance Claim" workflow uses the "stepped_form" shell
     When I open its view and select an instance at a form state

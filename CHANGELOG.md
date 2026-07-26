@@ -7,6 +7,10 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **E2E `@core` coverage (WS-E)** — step definitions for the primary happy
+  paths across auth, dashboard, workflows, builder, instances, shells, and
+  topology; scenarios needing still-unwritten steps are tagged `@wip`. CI now
+  runs `@smoke or (@core and not @wip)` — 24 scenarios, green.
 - **CI hardening (WS-F)** — a standalone frontend-build job (tsc -b + vite,
   ~2-minute type gate) and an enforced dependency-vulnerability job
   (pip-audit on backend requirements, npm audit at high+ on the frontend).
@@ -108,6 +112,12 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   0.8.0 but had no UI control).
 
 ### Fixed
+- **Saving instance metadata was broken in the browser** since optimistic
+  locking shipped (0.6.0): `If-Match` is not a CORS-safelisted request header,
+  so the PATCH triggered a preflight that django-cors-headers rejected — the
+  request never reached Django and the UI showed "Failed to save metadata".
+  Added `if-match` to `CORS_ALLOW_HEADERS`, with a regression test asserting
+  the preflight advertises it. Found by the new @core E2E coverage.
 - Builder transitions could appear to leave a node's **left** edge: the visible
   right-hand source handle had no id, so an edge with an undefined source handle
   attached ambiguously; every handle now has an explicit id and forward/backward

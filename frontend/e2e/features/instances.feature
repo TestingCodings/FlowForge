@@ -26,7 +26,7 @@ Feature: Instance lifecycle
     Then the instance's current state updates
     And the timeline records the transition
 
-  @core
+  @core @wip
   Scenario: A transition blocked by a rule surfaces the reason
     Given I am viewing an instance whose transition is blocked by a rule
     When I attempt the blocked transition

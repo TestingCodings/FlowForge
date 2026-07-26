@@ -163,7 +163,7 @@ jobs:
         run: pytest -q
 
   e2e-tests:
-    name: Run E2E smoke tests
+    name: Run E2E smoke + core tests
     runs-on: ubuntu-latest
 
     services:
@@ -249,12 +249,14 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E smoke tests
+      - name: Run E2E smoke + core tests
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:5173
           E2E_API_BASE: http://localhost:8000/api
-          E2E_TAGS: "@smoke"
+          # @wip marks scenarios whose steps aren't implemented yet; drop the
+          # tag from a scenario as its steps land.
+          E2E_TAGS: "@smoke or (@core and not @wip)"
         run: npm run test:e2e
 
       - name: Upload Playwright report

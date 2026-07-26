@@ -34,3 +34,22 @@ export const test = base.extend<{ signedInAs: (email: string) => Promise<void> }
 });
 
 export const { Given, When, Then } = createBdd(test);
+
+/** Call the FlowForge API from inside the page, reusing the UI session's JWT. */
+export async function apiFetch(page: Page, method: string, path: string, body?: unknown) {
+  return page.evaluate(
+    async ({ method, path, body, apiBase }) => {
+      const token = localStorage.getItem("ff_access_token");
+      const resp = await fetch(`${apiBase}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await resp.text();
+      let json: unknown = null;
+      try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+      return { status: resp.status, json };
+    },
+    { method, path, body, apiBase: process.env.E2E_API_BASE ?? "http://localhost:8000/api" },
+  );
+}

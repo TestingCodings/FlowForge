@@ -6,20 +6,20 @@ Feature: Workspace configuration
   Background:
     Given I am signed in as "admin@flowforge.dev"
 
-  @core
+  @core @wip
   Scenario: Changing the theme preset restyles the platform
     Given I am on the workspace settings page
     When I apply the "Daylight" theme preset and save
     Then the platform adopts the new theme colours
 
-  @core
+  @core @wip
   Scenario: Switching the language translates the navigation
     Given I am on the workspace settings page
     When I set the language to "Español" and save
     Then the sidebar navigation appears in Spanish
     And the document language is "es-ES"
 
-  @core
+  @core @wip
   Scenario: Compact density tightens spacing
     Given I am on the workspace settings page
     When I set the density to "Compact" and save

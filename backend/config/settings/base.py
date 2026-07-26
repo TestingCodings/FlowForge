@@ -2,6 +2,7 @@
 Django settings — base configuration shared across all environments.
 """
 from pathlib import Path
+from corsheaders.defaults import default_headers as cors_default_headers
 from decouple import config
 from datetime import timedelta
 
@@ -55,6 +56,12 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+
+# CORS: `If-Match` is not a browser-safelisted request header, so the optimistic
+# locking on PATCH /instances/<id>/metadata/ triggers a preflight. Without this
+# the browser blocks the request and metadata edits fail in the UI even though
+# the API accepts them.
+CORS_ALLOW_HEADERS = (*cors_default_headers, "if-match")
 
 TEMPLATES = [
     {
