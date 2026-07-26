@@ -1,0 +1,109 @@
+# Production / public-demo stack for flowforge.cortexa.solutions.
+# See docs/DEPLOYMENT.md. Run with:
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# Differences from docker-compose.yml (which is dev-only):
+#   * Caddy terminates TLS and is the ONLY service binding a host port.
+#     db/redis/backend are reachable only on the internal network, so the
+#     database is not exposed to the internet by a stray firewall rule.
+#   * No source bind-mounts — the image is the artefact.
+#   * No mailhog; demo settings use the console email backend.
+#   * worker + beat run alongside the web process. They are not optional:
+#     SLA checks, webhook retries, action hooks and the nightly demo reset
+#     all live there.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flowforge}
+      POSTGRES_USER: ${POSTGRES_USER:-flowforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowforge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend: &backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: flowforge-backend:latest
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
+    environment: &backend_env
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.demo}
+      DATABASE_URL: postgres://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-flowforge}
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-flowforge.cortexa.solutions}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://flowforge.cortexa.solutions}
+      SECRETS_ENCRYPTION_KEYS: ${SECRETS_ENCRYPTION_KEYS:?SECRETS_ENCRYPTION_KEYS must be set}
+      OUTBOUND_ALLOWED_HOSTS: ${OUTBOUND_ALLOWED_HOSTS:-webhook.site,httpbin.org,example.com}
+      MEDIA_ROOT: /data/media
+    volumes:
+      - media_data:/data/media
+      - static_data:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Same image and env as the web process, different entrypoint. The YAML
+  # anchors above keep them from drifting apart — a worker running different
+  # settings from the web process is a genuinely nasty class of bug.
+  worker:
+    <<: *backend
+    command: celery -A config worker --loglevel=info --concurrency=2
+    environment:
+      <<: *backend_env
+    ports: []
+
+  beat:
+    <<: *backend
+    command: celery -A config beat --loglevel=info
+    environment:
+      <<: *backend_env
+    ports: []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Static Vite build, produced on the host by:
+      #   VITE_API_BASE_URL=https://flowforge.cortexa.solutions/api npm run build
+      - ./frontend/dist:/srv/frontend:ro
+      - static_data:/srv/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  media_data:
+  static_data:
+  caddy_data:
+  caddy_config:

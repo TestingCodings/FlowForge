@@ -25,9 +25,17 @@ CSRF_COOKIE_SECURE = True
 # CORS — restrict to known frontend origin in production
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="").split(",")
 
-# Static files via S3
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-STATICFILES_STORAGE = "storages.backends.s3boto3.S3StaticStorage"
+# Object storage for uploads and static files.
+#
+# These used to be set as DEFAULT_FILE_STORAGE / STATICFILES_STORAGE. Django
+# 5.1 removed both settings, so they were being silently ignored — STORAGES
+# still resolved to FileSystemStorage and every uploaded MediaAsset would have
+# been written to container-local disk, lost on redeploy and invisible to the
+# other workers. Configuring STORAGES directly is the supported form.
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "storages.backends.s3boto3.S3StaticStorage"},
+}
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME")
 AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="eu-west-2")
 AWS_S3_FILE_OVERWRITE = False

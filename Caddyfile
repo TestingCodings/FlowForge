@@ -1,0 +1,67 @@
+# Reverse proxy for flowforge.cortexa.solutions (docs/DEPLOYMENT.md §1).
+# Caddy obtains and renews Let's Encrypt certificates automatically; there is
+# no certbot step and no cron renewal to forget.
+
+{$FLOWFORGE_DOMAIN:flowforge.cortexa.solutions} {
+	encode gzip zstd
+
+	# Cap request bodies at the edge so an oversized upload is rejected before
+	# it ever occupies a gunicorn worker. Django enforces its own, smaller
+	# limits (DATA_UPLOAD_MAX_MEMORY_SIZE, MEDIA_UPLOAD_MAX_BYTES) behind this.
+	request_body {
+		max_size 5MB
+	}
+
+	header {
+		# HSTS is also set by Django; duplicated here so it still applies to
+		# the static frontend, which never touches Django.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# NOTE — admin-login rate limiting is deliberately NOT enabled here.
+	# `rate_limit` is not a standard Caddy directive; it comes from the
+	# third-party caddy-ratelimit module, which the official caddy:2-alpine
+	# image does not bundle. Including it would make Caddy fail to parse this
+	# file and refuse to start — trading a brute-force risk for a total
+	# outage. To enable it, build a custom image:
+	#
+	#   FROM caddy:2-builder AS builder
+	#   RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+	#   FROM caddy:2-alpine
+	#   COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+	#
+	# then add, inside this site block:
+	#
+	#   @admin_login path /admin/login*
+	#   rate_limit @admin_login { zone admin { key {remote_host} events 10 window 1m } }
+	#
+	# Until then the exposure is bounded: DRF throttles the API, Django's
+	# admin is reachable only by the seeded superuser, and the demo database
+	# is rebuilt nightly.
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /admin/* {
+		reverse_proxy backend:8000
+	}
+
+	# Django's collectstatic output — admin CSS and DRF's browsable API.
+	handle /static/* {
+		root * /srv
+		file_server
+	}
+
+	# The Vite build. try_files sends unknown paths to index.html so client-side
+	# routes (/workflows/<id>/view) survive a hard refresh instead of 404ing.
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}

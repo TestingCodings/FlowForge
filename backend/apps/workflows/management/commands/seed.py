@@ -252,6 +252,35 @@ TESTRAIL_WORKFLOWS = [
 ALL_TESTRAIL_NAMES = [w["name"] for w in TESTRAIL_WORKFLOWS]
 
 
+
+def _delete_instances_leaves_first(queryset):
+    """Delete instances children-first so PROTECT on `parent` never fires.
+
+    Containers nest arbitrarily deep (an instance's parent is another
+    instance, PROTECTed), so a flat .delete() raises ProtectedError the moment
+    any instance has a child. That matters most on the public demo: a visitor
+    creating a sub-instance would otherwise wedge the nightly reset forever.
+
+    Repeatedly deleting only the childless rows peels the tree one layer at a
+    time. The loop is bounded by tree depth, and the guard breaks rather than
+    spinning if a cycle somehow exists.
+    """
+    pks = set(queryset.values_list("pk", flat=True))
+    while pks:
+        parents = set(
+            WorkflowInstance.objects
+            .filter(pk__in=pks, parent__isnull=False)
+            .values_list("parent_id", flat=True)
+        )
+        leaves = pks - parents
+        if not leaves:
+            # Cyclic or externally-referenced; let the ORM raise the real error.
+            WorkflowInstance.objects.filter(pk__in=pks).delete()
+            return
+        WorkflowInstance.objects.filter(pk__in=leaves).delete()
+        pks -= leaves
+
+
 class Command(BaseCommand):
     help = "Seed FlowForge with demo workflows and instances."
 
@@ -269,7 +298,9 @@ class Command(BaseCommand):
             names = [LEAVE_WORKFLOW["name"], CLAIM_WORKFLOW["name"]]
             if testrail:
                 names += ALL_TESTRAIL_NAMES
-            WorkflowInstance.objects.filter(workflow_definition__name__in=names).delete()
+            _delete_instances_leaves_first(
+                WorkflowInstance.objects.filter(workflow_definition__name__in=names)
+            )
             WorkflowDefinition.objects.filter(name__in=names).delete()
             for spec in DEMO_USERS:
                 User.objects.filter(email=spec["email"]).delete()

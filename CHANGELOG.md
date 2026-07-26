@@ -6,7 +6,46 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 
 ## [Unreleased]
 
+### Fixed
+- **There was no Celery app.** `config/celery.py` did not exist, so
+  `celery -A config worker` could not start and *nothing* in
+  `CELERY_BEAT_SCHEDULE` — SLA checks, webhook retries — had ever run. This
+  stayed invisible because every call site falls back to inline execution
+  when `.delay()` raises, so webhook delivery and action hooks were running
+  synchronously inside the request instead of on a worker. Added the app,
+  wired it into `config/__init__.py` so `@shared_task` binds correctly, and
+  added `autodiscover_tasks(related_name="hooks")` — without it the worker
+  would have rejected `execute_hook_task` as unregistered, since it lives in
+  `hooks.py` rather than `tasks.py`. A test now asserts every Beat entry
+  points at a task that actually exists.
+- **Production object storage was silently disabled.** `production.py` set
+  `DEFAULT_FILE_STORAGE` / `STATICFILES_STORAGE`, both removed in Django 5.1,
+  so `STORAGES["default"]` still resolved to `FileSystemStorage`: a real
+  deployment would have written every uploaded `MediaAsset` to container-local
+  disk, lost on redeploy and invisible to other workers. Now configured
+  through `STORAGES`.
+- **`seed --reset` crashed on nested instances.** `WorkflowInstance.parent`
+  is `PROTECT`, so a flat delete raised `ProtectedError` as soon as any
+  instance had a child. On the public demo one visitor creating a
+  sub-instance would have wedged the nightly reset permanently. Instances are
+  now deleted leaves-first.
+- Workspace `default_view` now accepts `scene`, matching `VALID_SHELLS`.
+
 ### Added
+- **Demo deployment code (WS-H)** — `config/settings/demo.py` for the public
+  demo: registration disabled (with a message pointing visitors at the seeded
+  accounts), DRF anon/user throttles, console email so a notification bug can
+  never become outbound spam, an `OUTBOUND_ALLOWED_HOSTS` allow-list on top of
+  the existing SSRF guard, tighter upload caps, and no DB SSL against a
+  same-network Postgres container. A `reset_demo` management command rebuilds
+  the demo nightly via Celery Beat; it reuses `seed --reset` so the demo can't
+  drift from local dev, suppresses the seed's credential table (container logs
+  are not a secret store), and is guarded by `DEMO_MODE` at both scheduling
+  and run time so it can never fire against real data. Plus
+  `docker-compose.prod.yml` (only Caddy binds host ports; worker and beat
+  share the web image via YAML anchors so they cannot drift) and a Caddyfile.
+  See DEPLOYMENT.md §7 for what is and isn't verified — the stack itself has
+  not been brought up, since Docker doesn't run on this machine.
 - **Computed fields in shells + relationship rollups (WS-C)** — shells now
   render `computed.<key>` columns/card-fields/axes alongside `metadata.<key>`.
   The `TableShell`, `KanbanShell`, and `MatrixShell` all read the shared

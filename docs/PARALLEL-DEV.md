@@ -22,7 +22,7 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 | WS-E E2E @core | ✅ done (161a0d9) | Claude |
 | WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |
 | WS-G i18n breadth | ✅ done (ae2ad5e) | Claude |
-| WS-H demo deployment | unclaimed | — |
+| WS-H demo deployment | **code done** (VPS steps pending) | Claude |
 | WS-I scene shell | **done** | Claude |
 
 ## How to use this
@@ -118,6 +118,15 @@ translates the newly-wired surfaces; fallback intact.
 `docker-compose.prod.yml` + Caddyfile, `OUTBOUND_ALLOWED_HOSTS` demo config.
 **Acceptance:** `reset_demo` reseeds idempotently; demo settings disable
 registration and set throttles; compose file documented (not run in CI).
+
+**Repo code done.** demo.py, reset_demo (+ Beat entry, DEMO_MODE-guarded),
+docker-compose.prod.yml, Caddyfile. Building it uncovered three latent bugs
+that had nothing to do with the demo: there was no Celery app at all, so
+Beat had never run and hooks were executing inline; production's S3 config
+used settings Django 5.1 removed, so uploads would have gone to local disk;
+and `seed --reset` crashed on nested instances. All fixed. Remaining work is
+on the VPS (provision, DNS, first `docker compose up`) — see DEPLOYMENT.md §7
+for the explicit unverified list.
 
 ## WS-I · Scene shell / visual-novel (after WS-A/B)
 **Design:** [MEDIA.md](MEDIA.md) Part 2. **Depends on:** WS-A/B (media).

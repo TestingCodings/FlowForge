@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,6 +17,16 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
+        # The public demo issues accounts rather than accepting them
+        # (docs/DEPLOYMENT.md §2.2). Absent the setting — i.e. every ordinary
+        # deployment — registration is open, so this is inert by default.
+        if not getattr(settings, "DEMO_REGISTRATION_ENABLED", True):
+            return Response(
+                {"detail": "Registration is disabled on this demo. "
+                           "Sign in with one of the demo accounts shown on the login page."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -91,6 +102,13 @@ class WorkspaceView(generics.GenericAPIView):
             "logo_url": ws.logo_url,
             "ui_config": ws.ui_config,
             "updated_at": ws.updated_at.isoformat(),
+            # Lets the frontend warn that data is rebuilt nightly, so a
+            # visitor doesn't mistake the reset for losing their work. Empty
+            # on every non-demo deployment, which renders no banner.
+            "demo_notice": (
+                getattr(settings, "DEMO_RESET_NOTICE", "")
+                if getattr(settings, "DEMO_MODE", False) else ""
+            ),
         })
 
     def put(self, request):
@@ -117,7 +135,9 @@ class WorkspaceView(generics.GenericAPIView):
                 ("font", {"inter", "system", "serif", "mono"}),
                 ("date_format", {"locale", "dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"}),
                 # VISION Layer 1: workspace-wide fallback shell, UI density, language
-                ("default_view", {"list", "kanban", "table", "calendar", "matrix", "stepped_form"}),
+                # Keep in sync with VALID_SHELLS in apps/workflows/ui_schema.py.
+                ("default_view", {"list", "kanban", "table", "calendar", "matrix",
+                                  "stepped_form", "scene"}),
                 ("density", {"comfortable", "compact"}),
                 # Keep in sync with LOCALES in frontend/src/i18n/index.tsx.
                 ("locale", {"en-GB", "es-ES", "fr-FR", "de-DE"}),

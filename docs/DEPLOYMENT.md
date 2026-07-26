@@ -41,8 +41,26 @@ flowforge.cortexa.solutions → VPS
 - Remove mailhog, remove backend port exposure (only Caddy binds 80/443)
 - Backend env: `DJANGO_SETTINGS_MODULE=config.settings.production`
 
-`production.py` is already correct: `DATABASE_URL` + SSL, HSTS, secure
-redirects, env-driven `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS`.
+`production.py` covers `DATABASE_URL` + SSL, HSTS, secure redirects, and
+env-driven `ALLOWED_HOSTS` / `CORS_ALLOWED_ORIGINS`. Two things it did *not*
+cover, both found while building this and both now fixed:
+
+- It configured object storage with `DEFAULT_FILE_STORAGE` /
+  `STATICFILES_STORAGE`, which **Django 5.1 removed**. They were silently
+  ignored, so `STORAGES["default"]` still resolved to `FileSystemStorage` —
+  a real deployment would have written every uploaded `MediaAsset` to
+  container-local disk, losing it on redeploy and hiding it from the other
+  workers. Now set via `STORAGES`.
+- There was **no Celery app at all** (`config/celery.py` did not exist), so
+  `celery -A config worker` could not start and nothing in
+  `CELERY_BEAT_SCHEDULE` had ever run. Call sites fall back to inline
+  execution when `.delay()` raises, which is why this was invisible in dev:
+  webhooks and action hooks were running synchronously inside the request.
+  Added, with `autodiscover_tasks(related_name="hooks")` so
+  `execute_hook_task` is registered too.
+
+The demo overrides the rest in `config/settings/demo.py` (no DB SSL against
+a same-network container, local disk instead of S3, console email).
 
 ---
 
@@ -177,3 +195,45 @@ visible and get upgraded deliberately.
 **This exemption is for dev tooling only.** If a *production* dependency
 ever needs an exception, do not widen this scope — pin the fix, or record
 the exception explicitly with an expiry date and an owner.
+
+---
+
+## 7. What is and isn't verified
+
+Being explicit about this, because "the config exists" and "the config works"
+are different claims and only one of them has been demonstrated.
+
+**Verified by test or by running it:**
+
+- `config/settings/demo.py` imports, and its deltas from production are
+  asserted (`tests/integration/test_demo_settings.py`, 14 tests) — including
+  that it does not drop base's throttle scopes or Beat entries.
+- Registration is refused when `DEMO_REGISTRATION_ENABLED=False`, with a
+  message pointing at the demo accounts, and no user row is created
+  (`test_demo_mode.py`, 5 tests).
+- `reset_demo` seeds from empty, is idempotent, restores a deleted demo user,
+  survives **nested instances**, and prints no credentials
+  (`test_reset_demo.py`, 8 tests). Also run for real, twice in a row.
+- The Celery app loads and every task the code enqueues is registered,
+  including `execute_hook_task`; every Beat entry points at a task that
+  actually exists (`test_celery_app.py`, 10 tests).
+- `docker-compose.prod.yml` parses and interpolates: verified with
+  `docker compose config`. The `:?` guards do fail the run when
+  `POSTGRES_PASSWORD` / `DJANGO_SECRET_KEY` / `SECRETS_ENCRYPTION_KEYS` are
+  unset, which was checked by omitting them.
+
+**Not verified — must be checked on first deploy:**
+
+- **The stack has never been brought up.** Docker cannot run on the
+  development laptop (DISM), so `docker compose up` is untested end to end.
+  Expect the first deploy to be a debugging session, not a formality.
+- **The Caddyfile has never been parsed.** No `caddy` binary was available to
+  run `caddy validate`. Run it on the VPS *before* pointing DNS:
+  `docker run --rm -v $PWD/Caddyfile:/etc/caddy/Caddyfile caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile`
+- **Admin-login rate limiting is not enabled** — the `rate_limit` directive
+  needs a third-party module the official image lacks. See the note in the
+  Caddyfile for the xcaddy build that turns it on.
+- **The frontend does not yet render `DEMO_RESET_NOTICE`**; the setting
+  exists but nothing consumes it, so visitors get no banner warning that data
+  resets nightly.
+- Backups (`pg_dump` rotation) and uptime monitoring are not set up.
