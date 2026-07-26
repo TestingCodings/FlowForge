@@ -7,7 +7,8 @@ source of truth for what a valid presentation config looks like — both the
 API endpoint and bundle import validate through here.
 
 Recognised keys:
-    shell         "list" | "kanban" | "table" | "calendar" | "matrix" | "stepped_form"
+    shell         "list" | "kanban" | "table" | "calendar" | "matrix" |
+                  "stepped_form" | "scene"
     card_fields   [str]  metadata keys shown on kanban cards
     list_columns  [str]  table shell columns: built-ins or "metadata.<key>"
     date_field    str    calendar shell date source: "created_at" or a metadata key
@@ -25,7 +26,7 @@ Recognised keys:
                   sum/min/max/avg/count over children or relationships, age_days, or if
 """
 
-VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix", "stepped_form")
+VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix", "stepped_form", "scene")
 
 TABLE_BUILTIN_COLUMNS = ("reference", "state", "sla", "status", "created")
 
@@ -156,6 +157,10 @@ def validate_ui_schema(ui_schema) -> str | None:
             if expr == "if" and not isinstance(spec.get("cond"), dict):
                 return f"ui_schema.computed['{name}'] if requires a 'cond' object."
 
+    scene_error = _validate_scene_config(ui_schema.get("scene_config"))
+    if scene_error:
+        return scene_error
+
     instance_view = ui_schema.get("instance_view")
     if instance_view is not None:
         if not isinstance(instance_view, dict):
@@ -180,4 +185,45 @@ def validate_ui_schema(ui_schema) -> str | None:
                 f"Valid: {', '.join(VALID_LAYOUTS)}."
             )
 
+    return None
+
+
+VALID_SPRITE_POSITIONS = ("left", "centre", "right")
+
+
+def _validate_scene_config(scene_config) -> str | None:
+    """Validate the `scene` shell's per-state presentation (docs/MEDIA.md Part 2).
+
+    Shape: {"<State name>": {background, sprites:[{asset, position}],
+                             speaker, dialogue}}
+    `background` and `sprite.asset` are either a MediaAsset UUID or a URL;
+    both are resolved client-side, so only their shape is checked here.
+    """
+    if scene_config is None:
+        return None
+    if not isinstance(scene_config, dict):
+        return "ui_schema.scene_config must be an object keyed by state name."
+
+    for state_name, scene in scene_config.items():
+        where = f"ui_schema.scene_config['{state_name}']"
+        if not isinstance(scene, dict):
+            return f"{where} must be an object."
+        for key in ("background", "speaker", "dialogue", "music"):
+            if key in scene and not isinstance(scene[key], str):
+                return f"{where}.{key} must be a string."
+        sprites = scene.get("sprites")
+        if sprites is not None:
+            if not isinstance(sprites, list):
+                return f"{where}.sprites must be a list."
+            for i, sprite in enumerate(sprites):
+                if not isinstance(sprite, dict):
+                    return f"{where}.sprites[{i}] must be an object."
+                if not sprite.get("asset"):
+                    return f"{where}.sprites[{i}] requires an 'asset'."
+                position = sprite.get("position", "centre")
+                if position not in VALID_SPRITE_POSITIONS:
+                    return (
+                        f"{where}.sprites[{i}].position must be one of: "
+                        f"{', '.join(VALID_SPRITE_POSITIONS)}."
+                    )
     return None

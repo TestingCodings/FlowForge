@@ -17,13 +17,13 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 |----|--------|-------|
 | WS-A media backend | ✅ done (TDD from PR #3's spec) | Copilot (tests) + Claude (impl) |
 | WS-B media frontend | ✅ done (PR #5, issue #4) | Copilot |
-| WS-C computed-in-shells | ✅ claimed | Copilot |
+| WS-C computed-in-shells | **done** (PR #7) | Copilot |
 | WS-D parallel states | hold (engine-exclusive) | — |
 | WS-E E2E @core | ✅ done (161a0d9) | Claude |
 | WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |
 | WS-G i18n breadth | ✅ done (ae2ad5e) | Claude |
 | WS-H demo deployment | unclaimed | — |
-| WS-I scene shell | **unblocked — ready to claim** | — |
+| WS-I scene shell | **done** | Claude |
 
 ## How to use this
 - **One agent per workstream.** Branch per workstream (`feat/<id>-<slug>`),
@@ -126,6 +126,13 @@ registration and set throttles; compose file documented (not run in CI).
 scene editor in the builder. **Acceptance:** a workflow with backgrounds +
 dialogue + choice-gated transitions plays as a visual novel; a two-ending
 demo workflow seeds.
+
+**Done.** Shipped the shell, `scene_config` validation, and
+`manage.py seed_demo_story`. Building it surfaced a gap: a transition could
+only write metadata via an outbound HTTP hook, so an inventory flag needed a
+network call. Added a `set_metadata` rule action (`apps/workflows/engine.py`)
+— useful well beyond games. The per-state scene *editor* in the builder is
+still outstanding.
 
 ---
 

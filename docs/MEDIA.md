@@ -4,8 +4,11 @@ Uploading and embedding images (and other files), and the larger ambition it
 unlocks: **visual-novel / narrative-game authoring** inside FlowForge, to a
 level comparable with Ren'Py or a Unity 2D scene flow.
 
-Status: **Part 1 (backend uploads) is implemented** (WS-A). Part 1b frontend
-(WS-B) and Part 2 (visual-novel scene shell, WS-I) remain planned.
+Status: **Part 1 (backend uploads) is implemented** (WS-A). **Part 2's scene
+shell is implemented** (WS-I) — see `manage.py seed_demo_story` for a playable
+two-ending reference story. Part 1b frontend (WS-B) and the per-state scene
+*authoring* UI remain planned; scene config is currently written as
+`ui_schema.scene_config`.
 
 ---
 
@@ -81,6 +84,7 @@ because the meta-model already maps onto a narrative engine:
 | Scene | **State** |
 | Choice / branch | **Transition** (multiple out of a state) |
 | Conditional branch ("if flag set") | **Rule** on a transition (block/allow) |
+| Setting a flag ("you take the key") | **`set_metadata` rule action** |
 | Variables / flags / inventory | **metadata_json** |
 | Derived stats (score, affection, HP) | **Computed fields** |
 | Player's save file / playthrough | **Instance** (each is one player's run) |

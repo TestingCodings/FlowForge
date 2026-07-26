@@ -104,3 +104,64 @@ def test_attachments_panel_is_valid():
     """The frontend advertises an `attachments` panel (WS-B); the backend
     allow-list must accept it or the panel can never be explicitly ordered."""
     assert validate_ui_schema({"instance_view": {"panels": ["state_graph", "attachments"]}}) is None
+
+
+# ---------------------------------------------------------------------------
+# scene shell (WS-I / docs/MEDIA.md Part 2)
+# ---------------------------------------------------------------------------
+
+
+def test_scene_shell_is_valid():
+    assert validate_ui_schema({"shell": "scene"}) is None
+
+
+def test_scene_config_accepted():
+    schema = {
+        "shell": "scene",
+        "scene_config": {
+            "Awakening": {
+                "background": "https://example.test/room.png",
+                "speaker": "Narrator",
+                "dialogue": "You wake on a cold floor.",
+                "music": "https://example.test/theme.mp3",
+                "sprites": [
+                    {"asset": "1f1c6e2a-0000-4000-8000-000000000001", "position": "left"},
+                    {"asset": "https://example.test/ghost.png"},  # position defaults
+                ],
+            }
+        },
+    }
+    assert validate_ui_schema(schema) is None
+
+
+def test_scene_config_must_be_an_object():
+    assert "keyed by state name" in validate_ui_schema({"scene_config": ["Awakening"]})
+
+
+def test_scene_must_be_an_object():
+    err = validate_ui_schema({"scene_config": {"Awakening": "You wake up."}})
+    assert err and "Awakening" in err and "must be an object" in err
+
+
+@pytest.mark.parametrize("key", ["background", "speaker", "dialogue", "music"])
+def test_scene_text_fields_must_be_strings(key):
+    err = validate_ui_schema({"scene_config": {"Awakening": {key: 42}}})
+    assert err and key in err and "must be a string" in err
+
+
+def test_sprites_must_be_a_list():
+    err = validate_ui_schema({"scene_config": {"Awakening": {"sprites": {"asset": "x"}}}})
+    assert err and "sprites must be a list" in err
+
+
+def test_sprite_requires_an_asset():
+    err = validate_ui_schema({"scene_config": {"Awakening": {"sprites": [{"position": "left"}]}}})
+    assert err and "requires an 'asset'" in err and "[0]" in err
+
+
+def test_sprite_position_must_be_known():
+    """British spelling is deliberate ('centre'); guard against 'center' drift."""
+    err = validate_ui_schema(
+        {"scene_config": {"Awakening": {"sprites": [{"asset": "x", "position": "center"}]}}}
+    )
+    assert err and "left, centre, right" in err

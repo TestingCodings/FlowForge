@@ -19,6 +19,26 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   validator accepts the new `over` value and the optional `rel_type` string;
   `WorkflowViewPage` automatically opts in when the workflow declares
   `ui_schema.computed`. Query-count and integration tests added. (PR #6.)
+- **Scene shell / visual-novel player (WS-I)** — `shell: "scene"` turns a
+  workflow into a playable branching story with no story-specific machinery in
+  the engine: a scene is a state, a choice is a transition, an inventory flag
+  is instance metadata, and a locked path is a rule whose `reason` becomes the
+  narration the player reads. Instances are save files, so one workflow holds
+  many playthroughs. Per-state presentation lives in `ui_schema.scene_config`
+  (background, positioned sprites, speaker, dialogue, music), validated
+  server-side; backgrounds and sprites accept a MediaAsset id or a URL, and ids
+  are fetched as authenticated blobs since asset URLs are private. Dialogue
+  supports `{{metadata.key}}` interpolation.
+- **`set_metadata` rule action** — a transition can now write values onto the
+  instance without an outbound call. Previously the only path to a metadata
+  write was an HTTP action hook, so even a purely internal stamp ("record that
+  approval happened", "the player now holds the key") needed a network round
+  trip. Values merge rather than replace; a `before` hook writing the same key
+  still wins, since it reflects external truth; a malformed `values` is skipped
+  rather than raised so one bad rule can't make a transition impossible.
+- **`manage.py seed_demo_story`** — seeds "The Locked Door", a two-ending
+  reference story for the scene shell. Refuses to clobber an existing copy
+  without `--reset`, since playthroughs are real instances.
 - **Attachments panel (WS-B)** — drag-and-drop / click-to-browse uploads on an
   instance, image thumbnails, download and delete, wired as an `attachments`
   panel in `instance_view`. Thumbnails and downloads fetch through the

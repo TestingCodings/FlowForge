@@ -8,6 +8,7 @@ import CalendarShell from "./CalendarShell";
 import MatrixShell from "./MatrixShell";
 import ListShell from "./ListShell";
 import SteppedFormShell from "./SteppedFormShell";
+import SceneShell from "./SceneShell";
 
 /**
  * The shell registry — the Layer 2/3 extension point.
@@ -24,6 +25,7 @@ export const SHELL_REGISTRY: Record<ShellName, ComponentType<ShellProps>> = {
   calendar: CalendarShell,
   matrix: MatrixShell,
   stepped_form: SteppedFormShell,
+  scene: SceneShell,
 };
 
 export const SHELL_OPTIONS: { value: ShellName; label: string }[] = [
@@ -33,6 +35,7 @@ export const SHELL_OPTIONS: { value: ShellName; label: string }[] = [
   { value: "calendar",     label: "Calendar" },
   { value: "matrix",       label: "Matrix (TestRail-style)" },
   { value: "stepped_form", label: "Stepped form (wizard)" },
+  { value: "scene",        label: "Scene (visual novel)" },
 ];
 
 export type { ShellProps } from "./types";

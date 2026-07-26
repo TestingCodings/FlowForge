@@ -53,7 +53,7 @@ export interface Rule {
   priority: number;
 }
 
-export type ShellName = "list" | "kanban" | "table" | "calendar" | "matrix" | "stepped_form";
+export type ShellName = "list" | "kanban" | "table" | "calendar" | "matrix" | "stepped_form" | "scene";
 
 export interface ChildrenConfig {
   workflows?: string[];
@@ -70,6 +70,24 @@ export interface MatrixConfig {
   columns?: string;
 }
 
+/** Scene shell (visual novel): per-state presentation, keyed by state name. */
+export interface SceneSprite {
+  /** A MediaAsset id (fetched with auth) or a plain URL. */
+  asset: string;
+  position?: "left" | "centre" | "right";
+}
+
+export interface Scene {
+  background?: string;
+  sprites?: SceneSprite[];
+  speaker?: string;
+  /** Supports {{metadata.key}} and {{instance.reference_number}}. */
+  dialogue?: string;
+  music?: string;
+}
+
+export type SceneConfig = Record<string, Scene>;
+
 export interface WorkflowUiSchema {
   shell?: ShellName;
   card_fields?: string[];
@@ -81,6 +99,7 @@ export interface WorkflowUiSchema {
   state_display?: Record<string, { colour?: string; icon?: string }>;
   children?: ChildrenConfig;
   matrix?: MatrixConfig;
+  scene_config?: SceneConfig;
   instance_view?: InstanceViewConfig;
   /** Computed field definitions (METAMODEL §2). */
   computed?: Record<string, Record<string, unknown>>;
