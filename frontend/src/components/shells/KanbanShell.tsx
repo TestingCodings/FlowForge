@@ -117,11 +117,17 @@ export default function KanbanShell({ workflow, instances, fireTransition }: She
                       {cardFields.length > 0 && (
                         <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 2 }}>
                           {cardFields.map(f => {
-                            const v = (inst.metadata_json ?? {})[f];
+                            let v: unknown;
+                            if (f.startsWith("computed.")) {
+                              v = (inst.computed ?? {})[f.slice(9)];
+                            } else {
+                              v = (inst.metadata_json ?? {})[f];
+                            }
                             if (v === undefined || v === null || v === "") return null;
+                            const label = f.startsWith("computed.") ? f.slice(9) : f;
                             return (
                               <div key={f} className="text-xs" style={{ display: "flex", gap: 6 }}>
-                                <span className="text-muted" style={{ fontFamily: "monospace" }}>{f}:</span>
+                                <span className="text-muted" style={{ fontFamily: "monospace" }}>{label}:</span>
                                 <span>{String(v)}</span>
                               </div>
                             );

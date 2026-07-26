@@ -52,9 +52,10 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     computed = serializers.SerializerMethodField()
 
     def get_computed(self, obj):
-        """Derived read-only fields (docs/METAMODEL.md §2). Detail-only — the
-        rollups query children, so they're skipped on list views to avoid N+1."""
-        if not self._is_detail_request():
+        """Derived read-only fields (docs/METAMODEL.md §2). Detail requests and
+        opted-in list requests (via ?include=computed) include computed values;
+        plain list requests return {} to avoid N+1 queries."""
+        if not self._is_detail_request() and not self._include_computed():
             return {}
         from apps.workflows.compute import compute_fields
         return compute_fields(obj)
@@ -92,6 +93,13 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
     def _is_detail_request(self):
         request = self.context.get("request")
         return bool(request and request.parser_context.get("kwargs", {}).get("pk"))
+
+    def _include_computed(self):
+        """True when the caller passes ?include=computed (opt-in for list views)."""
+        request = self.context.get("request")
+        if not request:
+            return False
+        return "computed" in (request.query_params.get("include") or "").split(",")
 
     def get_current_form(self, obj):
         """Latest form for the current state plus this instance's submission. Detail only."""

@@ -21,6 +21,10 @@ function cellValue(col: string, inst: WorkflowInstance): string | number {
     const v = (inst.metadata_json ?? {})[col.slice(9)];
     return v === undefined || v === null ? "" : (typeof v === "number" ? v : String(v));
   }
+  if (col.startsWith("computed.")) {
+    const v = (inst.computed ?? {})[col.slice(9)];
+    return v === undefined || v === null ? "" : (typeof v === "number" ? v : String(v));
+  }
   switch (col) {
     case "reference": return inst.reference_number;
     case "state":     return inst.current_state_name;
@@ -55,7 +59,11 @@ export default function TableShell({ workflow, instances }: ShellProps) {
   }, [instances, sortCol, sortAsc]);
 
   const header = (col: string) =>
-    BUILTIN_LABELS[col] ?? (col.startsWith("metadata.") ? col.slice(9) : col);
+    BUILTIN_LABELS[col] ?? (
+      col.startsWith("metadata.") || col.startsWith("computed.")
+        ? col.slice(9)
+        : col
+    );
 
   const toggleSort = (col: string) => {
     if (sortCol === col) setSortAsc(a => !a);

@@ -23,7 +23,7 @@ Recognised keys:
     instance_view {title_field, panels: [...], layout: "sidebar"|"stacked"}
                   per-workflow detail-page configuration
     computed      {name: {expr, ...}}  derived read-only fields (METAMODEL §2):
-                  sum/min/max/avg/count over children, age_days, or if
+                  sum/min/max/avg/count over children or relationships, age_days, or if
 """
 
 VALID_SHELLS = ("list", "kanban", "table", "calendar", "matrix", "stepped_form", "scene")
@@ -142,8 +142,16 @@ def validate_ui_schema(ui_schema) -> str | None:
                     f"ui_schema.computed['{name}'].expr must be one of: "
                     f"{', '.join(COMPUTED_EXPRS)}."
                 )
-            if expr in ("sum", "min", "max", "avg", "count") and spec.get("over") != "children":
-                return f"ui_schema.computed['{name}'] aggregate requires over='children'."
+            if expr in ("sum", "min", "max", "avg", "count"):
+                over = spec.get("over")
+                if over not in ("children", "relationships"):
+                    return (
+                        f"ui_schema.computed['{name}'] aggregate requires "
+                        f"over='children' or over='relationships'."
+                    )
+                rel_type = spec.get("rel_type")
+                if rel_type is not None and (not isinstance(rel_type, str) or not rel_type.strip()):
+                    return f"ui_schema.computed['{name}'].rel_type must be a non-empty string."
             if expr in ("sum", "min", "max", "avg") and not spec.get("field"):
                 return f"ui_schema.computed['{name}'] {expr} requires a 'field'."
             if expr == "if" and not isinstance(spec.get("cond"), dict):

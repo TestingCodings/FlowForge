@@ -101,6 +101,8 @@ export interface WorkflowUiSchema {
   matrix?: MatrixConfig;
   scene_config?: SceneConfig;
   instance_view?: InstanceViewConfig;
+  /** Computed field definitions (METAMODEL §2). */
+  computed?: Record<string, Record<string, unknown>>;
 }
 
 /** Per-workflow detail-page configuration (VISION Layer 2 `instance_view`). */
