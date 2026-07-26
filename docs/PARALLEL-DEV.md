@@ -15,11 +15,11 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 
 | WS | Status | Owner |
 |----|--------|-------|
-| WS-A media backend | unclaimed | — |
+| WS-A media backend | in review (PR #3 — needs implementation) | Copilot |
 | WS-B media frontend | blocked on WS-A | — |
 | WS-C computed-in-shells | unclaimed | — |
 | WS-D parallel states | hold (engine-exclusive) | — |
-| WS-E E2E @core | **in progress** | Claude (main session) |
+| WS-E E2E @core | ✅ done (161a0d9) | Claude |
 | WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |
 | WS-G i18n breadth | unclaimed | — |
 | WS-H demo deployment | unclaimed | — |
