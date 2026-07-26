@@ -11,7 +11,28 @@ import HooksPanel from "../components/HooksPanel";
 import PresentationPanel from "../components/PresentationPanel";
 import { formatDate } from "../hooks/useWorkspace";
 
-const FIELD_TYPES = ["text", "textarea", "number", "checkbox", "dropdown", "date"] as const;
+/**
+ * Every field type the engine validates, with a human label — the raw values
+ * ("datetime", "toggle") don't tell a designer what they'll get.
+ *
+ * This list previously held only six of the eleven supported types, so
+ * currency, toggle, datetime, image and file validated on the backend and
+ * rendered on the instance page but could never be *authored*. Keep in sync
+ * with FIELD_TYPES in backend/apps/forms/validation.py.
+ */
+const FIELD_TYPES = [
+  { value: "text",     label: "Text (single line)" },
+  { value: "textarea", label: "Text (paragraph)" },
+  { value: "number",   label: "Number" },
+  { value: "currency", label: "Currency" },
+  { value: "checkbox", label: "Checkbox" },
+  { value: "toggle",   label: "Toggle" },
+  { value: "dropdown", label: "Dropdown" },
+  { value: "date",     label: "Date" },
+  { value: "datetime", label: "Date & time" },
+  { value: "image",    label: "Image upload" },
+  { value: "file",     label: "File upload" },
+] as const;
 
 /* ─── Constants ─── */
 const OPERATORS = [
@@ -765,7 +786,7 @@ export default function WorkflowDetailPage() {
                     onChange={e => setFormFields(rows => rows.map((r, j) => j === i ? { ...r, type: e.target.value as FormField["type"] } : r))}
                     style={{ fontSize: "0.8rem", padding: "5px 8px" }}
                   >
-                    {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                   <label className="flex items-center gap-1 text-xs" style={{ cursor: "pointer", whiteSpace: "nowrap" }}>
                     <input

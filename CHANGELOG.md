@@ -32,6 +32,23 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 - Workspace `default_view` now accepts `scene`, matching `VALID_SHELLS`.
 
 ### Added
+- **`file` / `image` form fields** — a form field can now hold a real
+  uploaded file instead of a pasted link. The stored value is a **MediaAsset
+  id**, so the reference is durable, access-controlled, and verifiably
+  present; the backend checks the asset exists *and* is anchored to this
+  instance (or its workflow), closing a hole where a submission could point
+  at an attachment on an instance you can't see. Uploading happens inline and
+  anchors the file immediately, so a validation error can't lose it. This
+  turns "Evidence link" on a test result into an actual attachment.
+
+  Found while wiring it: the two halves had drifted badly. `file`/`image`
+  existed in the frontend types and rendered a "paste a file reference" box,
+  but the backend didn't know those types at all, so **any string passed
+  validation unchecked**. Meanwhile the form editor offered only 6 of the 11
+  supported types — `currency`, `toggle`, `datetime`, `image` and `file`
+  validated and rendered but could never be *authored*. All three surfaces
+  now agree, and the shared upload widget is used by both the instance page
+  and the stepped-form shell rather than being implemented twice.
 - **Demo deployment code (WS-H)** — `config/settings/demo.py` for the public
   demo: registration disabled (with a message pointing visitors at the seeded
   accounts), DRF anon/user throttles, console email so a notification bug can

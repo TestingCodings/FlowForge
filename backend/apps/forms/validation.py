@@ -1,4 +1,18 @@
+import uuid
+
 from rest_framework.exceptions import ValidationError
+
+# Every field type the platform understands. Keep in sync with FormField in
+# frontend/src/types/api.ts and FIELD_TYPES in the form editor — a type that
+# validates here but isn't offered there is a capability nobody can reach.
+FILE_TYPES = {"file", "image"}
+FIELD_TYPES = {
+    "text", "textarea", "dropdown",
+    "number", "currency",
+    "checkbox", "toggle",
+    "date", "datetime",
+    *FILE_TYPES,
+}
 
 
 def _validate_type(value, field_type):
@@ -10,9 +24,50 @@ def _validate_type(value, field_type):
         raise ValidationError("must be a boolean")
     if field_type in {"date", "datetime"} and not isinstance(value, str):
         raise ValidationError("must be an ISO string")
+    if field_type in FILE_TYPES:
+        # A file field holds a MediaAsset id, not a URL or a filename. Storing
+        # a reference (rather than a link someone pasted) is what makes the
+        # attachment durable, access-controlled, and actually present.
+        if not isinstance(value, str):
+            raise ValidationError("must be a media asset id")
+        try:
+            uuid.UUID(value)
+        except (ValueError, AttributeError, TypeError):
+            raise ValidationError(
+                "must be a media asset id — upload the file, don't paste a link"
+            )
 
 
-def validate_submission(schema, data):
+def _validate_asset_reference(value, instance):
+    """Check a file field's asset exists and belongs to this instance.
+
+    Shape alone isn't enough: a well-formed UUID can point at nothing, or at
+    an attachment on an instance the submitter can't otherwise see. Requiring
+    the asset to be anchored to this instance (or to its workflow definition,
+    for reusable assets) keeps a form submission from becoming a way to
+    reference someone else's file.
+    """
+    from apps.media.models import MediaAsset
+
+    asset = MediaAsset.objects.filter(id=value).first()
+    if asset is None:
+        raise ValidationError("media asset not found")
+
+    belongs = (
+        asset.workflow_instance_id == instance.id
+        or asset.workflow_definition_id == instance.workflow_definition_id
+    )
+    if not belongs:
+        raise ValidationError("media asset does not belong to this instance")
+
+
+def validate_submission(schema, data, instance=None):
+    """Validate submitted values against a form schema.
+
+    `instance` is optional so the function stays usable for schema-only
+    checks (previews, tests). When it is supplied, file fields additionally
+    have their asset resolved and ownership-checked.
+    """
     if not isinstance(schema, dict):
         raise ValidationError("schema must be an object")
     if not isinstance(data, dict):
@@ -41,6 +96,13 @@ def validate_submission(schema, data):
             except ValidationError as exc:
                 errors[name] = str(exc.detail[0]) if hasattr(exc, "detail") else str(exc)
                 continue
+
+            if field_type in FILE_TYPES and instance is not None:
+                try:
+                    _validate_asset_reference(value, instance)
+                except ValidationError as exc:
+                    errors[name] = str(exc.detail[0]) if hasattr(exc, "detail") else str(exc)
+                    continue
 
             if field_type in {"number", "currency"}:
                 minimum = field.get("min")

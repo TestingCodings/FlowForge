@@ -58,7 +58,11 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
         if form_definition.state_id != workflow_instance.current_state_id:
             raise serializers.ValidationError("form_definition does not match current instance state")
 
-        validate_submission(form_definition.schema, attrs.get("data", {}))
+        # Pass the instance so file fields can resolve their asset and
+        # verify it belongs here rather than to someone else's instance.
+        validate_submission(
+            form_definition.schema, attrs.get("data", {}), instance=workflow_instance
+        )
         return attrs
 
     def create(self, validated_data):

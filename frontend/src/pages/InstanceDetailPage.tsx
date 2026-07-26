@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
+import FormFileField from "../components/FormFileField";
 import {
   WorkflowInstance, Transition, AuditEntry, UserProfile, InstancePanel,
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
@@ -596,6 +597,7 @@ export default function InstanceDetailPage() {
                   {instance.current_form && !isCompleted && (
                     <StateFormPanel
                       form={instance.current_form}
+                      workflowInstanceId={instance.id}
                       canSubmit={userCan(myRoles, "transition")}
                       isPending={formMutation.isPending}
                       onSubmit={(data) =>
@@ -768,13 +770,14 @@ function eventIcon(action: string) {
 /* ── State form panel component ────────────────────────────────────────── */
 
 function StateFormPanel({
-  form, canSubmit, isPending, onSubmit, submitError,
+  form, canSubmit, isPending, onSubmit, submitError, workflowInstanceId,
 }: {
   form: CurrentForm;
   canSubmit: boolean;
   isPending: boolean;
   onSubmit: (data: Record<string, unknown>) => void;
   submitError: string | null;
+  workflowInstanceId: string;
 }) {
   const fields = form.schema.fields ?? [];
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -871,6 +874,7 @@ function StateFormPanel({
                 value={values[f.name]}
                 error={localErrs[f.name]}
                 onChange={v => setValue(f.name, v)}
+                workflowInstanceId={workflowInstanceId}
               />
             ))}
           </div>
@@ -887,12 +891,13 @@ function StateFormPanel({
 }
 
 function FormFieldInput({
-  field, value, error, onChange,
+  field, value, error, onChange, workflowInstanceId,
 }: {
   field: FormField;
   value: unknown;
   error?: string;
   onChange: (v: unknown) => void;
+  workflowInstanceId: string;
 }) {
   const label = (
     <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>
@@ -962,19 +967,17 @@ function FormFieldInput({
   }
 
   if (field.type === "image" || field.type === "file") {
+    // The value is a MediaAsset id, not a URL — the upload happens here and
+    // the file becomes an attachment on this instance immediately.
     return (
       <div>
         {label}
-        <input
-          type={field.type === "image" ? "url" : "text"}
-          value={(value as string) ?? ""}
-          onChange={e => onChange(e.target.value)}
-          style={inputStyle}
-          placeholder={field.type === "image" ? "Paste an image URL" : "Paste a file reference"}
+        <FormFileField
+          value={(value as string) ?? null}
+          onChange={id => onChange(id)}
+          workflowInstanceId={workflowInstanceId}
+          accept={field.type === "image" ? "image/*" : undefined}
         />
-        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
-          Upload files in the Attachments panel, then paste the URL or reference here.
-        </div>
         {errEl}
       </div>
     );

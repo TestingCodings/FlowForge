@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { apiClient } from "../../api/client";
+import FormFileField from "../FormFileField";
 import { CurrentForm, FormField, State, Transition, WorkflowInstance } from "../../types/api";
 import { instanceTitle, ShellProps, stateColour, stateIcon } from "./types";
 
@@ -160,6 +161,7 @@ export default function SteppedFormShell({ workflow, instances, fireTransition, 
                 isPending={submitForm.isPending}
                 error={formError}
                 onSubmit={(data) => submitForm.mutate({ form_definition: form.id, data })}
+                workflowInstanceId={selected.id}
               />
             ) : (
               <p className="text-muted text-sm" style={{ margin: "12px 0 20px" }}>
@@ -200,12 +202,13 @@ export default function SteppedFormShell({ workflow, instances, fireTransition, 
 
 /* ── Focused, Typeform-styled form for the current step ── */
 function StepForm({
-  form, isPending, error, onSubmit,
+  form, isPending, error, onSubmit, workflowInstanceId,
 }: {
   form: CurrentForm;
   isPending: boolean;
   error: string | null;
   onSubmit: (data: Record<string, unknown>) => void;
+  workflowInstanceId: string;
 }) {
   const fields = form.schema.fields ?? [];
   const [values, setValues] = useState<Record<string, unknown>>(form.submission_data ?? {});
@@ -263,7 +266,14 @@ function StepForm({
   return (
     <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 18 }}>
       {fields.map((f) => (
-        <StepField key={f.name} field={f} value={values[f.name]} error={errs[f.name]} onChange={(v) => setValue(f.name, v)} />
+        <StepField
+          key={f.name}
+          field={f}
+          value={values[f.name]}
+          error={errs[f.name]}
+          onChange={(v) => setValue(f.name, v)}
+          workflowInstanceId={workflowInstanceId}
+        />
       ))}
       {error && <div className="alert alert-error">{error}</div>}
       <button className="btn-primary" onClick={submit} disabled={isPending} style={{ alignSelf: "flex-start" }}>
@@ -274,12 +284,13 @@ function StepForm({
 }
 
 function StepField({
-  field, value, error, onChange,
+  field, value, error, onChange, workflowInstanceId,
 }: {
   field: FormField;
   value: unknown;
   error?: string;
   onChange: (v: unknown) => void;
+  workflowInstanceId: string;
 }) {
   const label = (
     <label style={{ display: "block", fontSize: "0.95rem", fontWeight: 600, marginBottom: 6 }}>
@@ -324,6 +335,17 @@ function StepField({
     case "number":
     case "currency":
       control = <input type="number" value={String(value ?? "")} min={field.min} max={field.max} onChange={(e) => onChange(e.target.value)} style={big} />;
+      break;
+    case "file":
+    case "image":
+      control = (
+        <FormFileField
+          value={(value as string) ?? null}
+          onChange={(id) => onChange(id)}
+          workflowInstanceId={workflowInstanceId}
+          accept={field.type === "image" ? "image/*" : undefined}
+        />
+      );
       break;
     default:
       control = <input type="text" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} style={big} />;
