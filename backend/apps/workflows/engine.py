@@ -65,6 +65,26 @@ def validate_transition(instance, transition_id):
     return TransitionResult(transition=transition, actions=actions)
 
 
+def _metadata_from_actions(actions) -> dict:
+    """Collect `set_metadata` rule actions into a single delta.
+
+    Lets a transition stamp facts onto the instance without an outbound call —
+    "record that approval happened", "the player now holds the key". Later
+    actions win over earlier ones, matching rule priority order.
+
+    A malformed action is skipped rather than raised: a typo in one rule
+    shouldn't make the whole transition impossible.
+    """
+    delta: dict = {}
+    for action in actions:
+        if action.get("type") != "set_metadata":
+            continue
+        values = action.get("values")
+        if isinstance(values, dict):
+            delta.update(values)
+    return delta
+
+
 def perform_transition(instance, transition_id):
     """
     Pre-flight (no transaction): validate rules + required forms, then run
@@ -80,7 +100,10 @@ def perform_transition(instance, transition_id):
     # `before` hooks run outside the transaction so their network calls don't
     # hold a DB transaction open. Deferred import avoids an engine↔hooks cycle.
     from apps.notifications.hooks import run_before_hooks
-    metadata_deltas = run_before_hooks(instance, result.transition)
+    # Rule-set values land first so a hook reporting external truth can
+    # override a statically-declared default.
+    metadata_deltas = _metadata_from_actions(result.actions)
+    metadata_deltas.update(run_before_hooks(instance, result.transition))
 
     with transaction.atomic():
         locked = WorkflowInstance.objects.select_for_update().get(pk=instance.pk)

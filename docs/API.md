@@ -93,7 +93,15 @@ Standard CRUD at `/states/`, `/transitions/`, `/rules/`. Reads need viewer; writ
 }
 ```
 
-Operators: `gt gte lt lte eq ne contains starts_with is_true is_false`. Actions: `block_transition`, `assign_role`. Rules evaluate against instance `metadata_json` **plus injected hierarchy facts**: `children_total`, `children_open`, `children_complete` — so a rule can hold a parent in place until every child completes.
+Operators: `gt gte lt lte eq ne contains starts_with is_true is_false`. Actions: `block_transition`, `assign_role`, `set_metadata`. Rules evaluate against instance `metadata_json` **plus injected hierarchy facts**: `children_total`, `children_open`, `children_complete` — so a rule can hold a parent in place until every child completes.
+
+`set_metadata` writes values onto the instance as part of the transition, without an outbound call:
+
+```json
+{"type": "set_metadata", "values": {"escalated": true, "tier": 2}}
+```
+
+Values merge into `metadata_json` (they don't replace it). Where a `before` hook writes the same key, the hook wins — it reflects external truth. A malformed `values` is skipped rather than raised, so one bad rule can't make a transition impossible.
 
 ## Instances
 

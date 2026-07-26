@@ -75,3 +75,6 @@ frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
 backend/media_uploads/
+
+# Claude Code per-machine permission state (launch.json is shared)
+.claude/settings.local.json
