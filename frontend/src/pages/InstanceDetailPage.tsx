@@ -10,6 +10,7 @@ import {
 import StateGraph from "../components/StateGraph";
 import Hint from "../components/Hint";
 import ChildrenPanel from "../components/ChildrenPanel";
+import AttachmentsPanel from "../components/AttachmentsPanel";
 import { formatDateTime } from "../hooks/useWorkspace";
 
 /* ─── Role capability helpers ─── */
@@ -99,7 +100,7 @@ export default function InstanceDetailPage() {
      what order. Unconfigured workflows get the platform default below, so
      existing pages are unchanged. */
   const DEFAULT_PANELS: InstancePanel[] = [
-    "state_graph", "forms", "children", "relationships", "timeline",
+    "state_graph", "forms", "attachments", "children", "relationships", "timeline",
   ];
   const instanceView = workflow?.ui_schema?.instance_view;
   const orderedPanels: InstancePanel[] = (instanceView?.panels ?? DEFAULT_PANELS)
@@ -620,6 +621,15 @@ export default function InstanceDetailPage() {
 
             </Fragment>
           );
+          case "attachments": return (
+            <Fragment key="attachments">
+              <AttachmentsPanel
+                workflowInstanceId={instance.id}
+                currentUserId={me?.id}
+                roles={myRoles}
+              />
+            </Fragment>
+          );
           case "relationships": return (
             <Fragment key="relationships">
                   {/* ── Relationships ── */}
@@ -946,6 +956,25 @@ function FormFieldInput({
           <option value="">Select…</option>
           {field.options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {errEl}
+      </div>
+    );
+  }
+
+  if (field.type === "image" || field.type === "file") {
+    return (
+      <div>
+        {label}
+        <input
+          type={field.type === "image" ? "url" : "text"}
+          value={(value as string) ?? ""}
+          onChange={e => onChange(e.target.value)}
+          style={inputStyle}
+          placeholder={field.type === "image" ? "Paste an image URL" : "Paste a file reference"}
+        />
+        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+          Upload files in the Attachments panel, then paste the URL or reference here.
+        </div>
         {errEl}
       </div>
     );

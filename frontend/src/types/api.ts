@@ -87,7 +87,7 @@ export interface WorkflowUiSchema {
 /** Per-workflow detail-page configuration (VISION Layer 2 `instance_view`). */
 export type InstancePanel =
   | "description" | "metadata" | "comments" | "state_graph"
-  | "timeline" | "forms" | "children" | "relationships" | "tasks";
+  | "timeline" | "forms" | "attachments" | "children" | "relationships" | "tasks";
 
 export interface InstanceViewConfig {
   /** Metadata key used as the page title, falling back to the reference. */
@@ -185,7 +185,7 @@ export interface WebhookSubscription {
 
 export interface FormField {
   name: string;
-  type: "text" | "textarea" | "number" | "currency" | "checkbox" | "toggle" | "dropdown" | "date" | "datetime";
+  type: "text" | "textarea" | "number" | "currency" | "checkbox" | "toggle" | "dropdown" | "date" | "datetime" | "image" | "file";
   required?: boolean;
   label?: string;
   min?: number;
@@ -333,4 +333,18 @@ export interface TransitionHook {
   is_active: boolean;
   created_at: string;
   execution_count: number;
+}
+
+export interface MediaAsset {
+  id: string;
+  original_name: string;
+  content_type: string;
+  size_bytes: number;
+  kind: "image" | "document" | "audio" | "other";
+  workflow_instance: string | null;
+  workflow_definition: string | null;
+  uploaded_by: string | null;
+  uploaded_by_email: string | null;
+  created_at: string;
+  download_url: string;
 }
