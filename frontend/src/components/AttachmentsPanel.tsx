@@ -12,6 +12,10 @@ interface AttachmentsPanelProps {
 }
 
 const MANAGER_ROLES = new Set(["platform_admin", "workflow_designer"]);
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES / (1024 * 1024);
+const ACCEPT_TYPES = "image/jpeg,image/png,image/gif,application/pdf,application/zip";
+const ALLOWED_TYPES_LABEL = "JPEG, PNG, GIF, PDF, ZIP";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -70,6 +74,10 @@ export default function AttachmentsPanel({
         try {
           const resp = await apiClient.get(asset.download_url, { responseType: "blob" });
           const blobUrl = URL.createObjectURL(resp.data);
+          if (cancelled) {
+            URL.revokeObjectURL(blobUrl);
+            return;
+          }
           nextUrls[asset.id] = blobUrl;
           urlsToRevoke.push(blobUrl);
         } catch {
@@ -100,7 +108,12 @@ export default function AttachmentsPanel({
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
-      setUploadError(detail ?? (err?.response?.status === 403 ? "You do not have permission to upload files." : "Upload failed."));
+      setUploadError(
+        detail
+        ?? (err?.response?.status === 403
+          ? "You do not have permission to upload files."
+          : "Upload failed. Please check your connection and try again."),
+      );
     },
   });
 
@@ -114,13 +127,22 @@ export default function AttachmentsPanel({
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
-      setDeleteError(detail ?? (err?.response?.status === 403 ? "You do not have permission to delete this file." : "Delete failed."));
+      setDeleteError(
+        detail
+        ?? (err?.response?.status === 403
+          ? "You do not have permission to delete this file."
+          : "Delete failed. Please try again."),
+      );
     },
   });
 
   const handleUpload = (file?: File | null) => {
     if (!file) return;
     setUploadError(null);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(`File is too large. Maximum size is ${MAX_UPLOAD_MIB} MiB.`);
+      return;
+    }
     uploadMutation.mutate(file);
   };
 
@@ -147,7 +169,7 @@ export default function AttachmentsPanel({
     a.href = url;
     a.download = asset.original_name || "attachment";
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   return (
@@ -161,7 +183,7 @@ export default function AttachmentsPanel({
         ref={fileInputRef}
         type="file"
         onChange={handleFileChange}
-        accept="image/jpeg,image/png,image/gif,application/pdf,application/zip"
+        accept={ACCEPT_TYPES}
         style={{ display: "none" }}
         disabled={!canUpload || uploadMutation.isPending}
       />
@@ -186,7 +208,7 @@ export default function AttachmentsPanel({
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
               {uploadMutation.isPending ? "Uploading…" : "Drag and drop a file, or click to browse"}
             </div>
-            <div className="text-xs text-muted">Allowed: JPEG, PNG, GIF, PDF, ZIP · Max 20 MiB</div>
+            <div className="text-xs text-muted">Allowed: {ALLOWED_TYPES_LABEL} · Max {MAX_UPLOAD_MIB} MiB</div>
           </>
         ) : (
           <div className="text-sm text-muted">You need participant role or above to upload attachments.</div>
