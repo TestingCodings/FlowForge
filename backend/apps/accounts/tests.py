@@ -155,7 +155,9 @@ class TestWorkspaceConfig:
         assert cfg["default_view"] == "matrix"
 
     @pytest.mark.parametrize("key,value", [
-        ("locale", "fr-FR"),
+        # A locale with no catalogue in frontend/src/i18n (fr-FR and de-DE are
+        # supported, so they'd no longer be rejected).
+        ("locale", "xx-XX"),
         ("density", "roomy"),
         ("default_view", "gantt"),
     ])

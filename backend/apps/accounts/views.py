@@ -119,7 +119,8 @@ class WorkspaceView(generics.GenericAPIView):
                 # VISION Layer 1: workspace-wide fallback shell, UI density, language
                 ("default_view", {"list", "kanban", "table", "calendar", "matrix", "stepped_form"}),
                 ("density", {"comfortable", "compact"}),
-                ("locale", {"en-GB", "es-ES"}),
+                # Keep in sync with LOCALES in frontend/src/i18n/index.tsx.
+                ("locale", {"en-GB", "es-ES", "fr-FR", "de-DE"}),
             ):
                 if key in ui and ui[key] not in valid:
                     return Response(

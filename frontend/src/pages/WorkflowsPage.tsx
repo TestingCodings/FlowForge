@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../api/client";
+import { useTranslation } from "../i18n";
 import { Workflow } from "../types/api";
 
 export default function WorkflowsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -41,8 +43,8 @@ export default function WorkflowsPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Workflows</h2>
-          <p>{data.length} definitions · {active} active</p>
+          <h2>{t("page.workflows.title")}</h2>
+          <p>{t("page.workflows.subtitle", { count: data.length, active })}</p>
         </div>
         <div className="flex gap-2">
           <input

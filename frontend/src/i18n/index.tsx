@@ -13,6 +13,8 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 
 import { enGB, type Catalogue, type MessageKey } from "./locales/en-GB";
 import { esES } from "./locales/es-ES";
+import { frFR } from "./locales/fr-FR";
+import { deDE } from "./locales/de-DE";
 
 export interface LocaleOption {
   value: string;      // BCP-47 tag, also used for Intl date/number formatting
@@ -24,6 +26,8 @@ export interface LocaleOption {
 export const LOCALES: LocaleOption[] = [
   { value: "en-GB", label: "English (UK)", catalogue: enGB },
   { value: "es-ES", label: "Español", catalogue: esES },
+  { value: "fr-FR", label: "Français", catalogue: frFR },
+  { value: "de-DE", label: "Deutsch", catalogue: deDE },
 ];
 
 export const DEFAULT_LOCALE = "en-GB";
