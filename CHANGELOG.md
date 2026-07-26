@@ -7,6 +7,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **File & image uploads (WS-A)** — `MediaAsset` plus `/api/media/`:
+  multipart upload (participant+), list and authenticated download (viewer+),
+  delete (uploader or designer+). Security is server-side throughout: the type
+  is decided by **magic-byte sniffing** (so a renamed executable is rejected),
+  size is capped by `MEDIA_UPLOAD_MAX_BYTES`, **images are re-encoded through
+  Pillow** to strip EXIF and defuse polyglot/trailing payloads, storage keys are
+  UUID-generated so a crafted filename can never shape the path, and the
+  internal `file` path is never serialised — downloads route through the
+  authenticated endpoint, never a bucket URL. Local dev writes to disk;
+  production swaps `STORAGES["default"]` for R2 with no model change.
+  Built TDD against the 38-test spec from PR #3, plus polyglot and
+  instance-attachment coverage (40 tests).
 - **E2E `@core` coverage (WS-E)** — step definitions for the primary happy
   paths across auth, dashboard, workflows, builder, instances, shells, and
   topology; scenarios needing still-unwritten steps are tagged `@wip`. CI now

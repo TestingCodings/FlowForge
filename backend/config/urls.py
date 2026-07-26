@@ -7,6 +7,7 @@ from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet, Wo
 from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
+from apps.media.views import MediaAssetViewSet
 from apps.instances.topology import TopologyView
 from apps.instances.triggers import TriggerViewSet, TriggerFireView
 from apps.secrets.views import SecretViewSet
@@ -37,6 +38,7 @@ router.register(r"webhooks", WebhookSubscriptionViewSet, basename="webhook")
 router.register(r"triggers", TriggerViewSet, basename="trigger")
 router.register(r"secrets", SecretViewSet, basename="secret")
 router.register(r"hooks", TransitionHookViewSet, basename="hook")
+router.register(r"media", MediaAssetViewSet, basename="media")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

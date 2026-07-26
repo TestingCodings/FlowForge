@@ -23,7 +23,9 @@ ENV/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media/
+# NB: scoped, not a bare `media/` — that silently excluded the
+# backend/apps/media/ source package (it broke a PR exactly this way).
+/media/
 staticfiles/
 
 # Environment files
@@ -72,3 +74,4 @@ frontend/.features-gen/
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
+backend/media_uploads/

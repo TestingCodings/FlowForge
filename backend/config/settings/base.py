@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.notifications",
     "apps.secrets",
+    "apps.media",
 ]
 
 MIDDLEWARE = [
@@ -102,6 +103,15 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+# ── Media uploads (docs/MEDIA.md) ──
+# Local dev/tests: files land on disk under MEDIA_ROOT (no cloud creds needed).
+# Production: override STORAGES["default"] with django-storages' S3Boto3Storage
+# pointed at Cloudflare R2 (private ACL + signed URLs). FileField picks it up
+# automatically — no model change required.
+MEDIA_ROOT = BASE_DIR / "media_uploads"
+MEDIA_URL = "/media/"  # local dev only; assets are served via the authenticated API
+MEDIA_UPLOAD_MAX_BYTES = config("MEDIA_UPLOAD_MAX_BYTES", default=20 * 1024 * 1024, cast=int)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
