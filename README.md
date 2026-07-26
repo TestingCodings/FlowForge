@@ -26,33 +26,25 @@ FlowForge is a configurable workflow automation platform that lets teams define 
 ## Architecture
 
 ```mermaid
-graph TB
-    subgraph clients["Clients"]
-        UI["React 18 + TypeScript<br/>TanStack Query, React Flow"]
-        Agent["AI agent<br/>(MCP client)"]
-        Ext["External systems"]
-    end
+graph LR
+    UI["React 18 + TypeScript<br/>TanStack Query, React Flow"]
+    Agent["AI agent (MCP client)"]
+    Ext["External systems"]
 
-    subgraph core["Django 5.2 + DRF"]
-        API["REST API<br/>JWT, 5-tier RBAC"]
-        Engine["Workflow engine<br/>validate, hooks, commit"]
-        Shells["ui_schema<br/>7 shells, computed fields"]
-        Audit["Immutable audit log"]
-    end
+    MCP["MCP server<br/>FastMCP, 10 tools"]
+    API["REST API<br/>Django 5.2 + DRF, JWT, 5-tier RBAC"]
+    Engine["Workflow engine<br/>validate, hooks, commit"]
+    Shells["ui_schema<br/>7 shells, computed fields"]
+    Audit["Immutable audit log"]
 
-    subgraph queue["Async (Celery)"]
-        Worker["Worker<br/>hooks, webhooks, notifications"]
-        Beat["Beat<br/>SLA checks, retries"]
-    end
+    Worker["Celery worker<br/>hooks, webhooks, notifications"]
+    Beat["Celery beat<br/>SLA checks, retries"]
 
-    subgraph stores["Services and stores"]
-        MCP["MCP server<br/>FastMCP, 10 tools"]
-        RulesMS["Rules service<br/>FastAPI + local fallback"]
-        PG["PostgreSQL"]
-        Redis["Redis"]
-        Blob["Object storage<br/>S3/R2, disk in dev"]
-        Secrets["Secret store<br/>Fernet, versioned keys"]
-    end
+    RulesMS["Rules service<br/>FastAPI + local fallback"]
+    Secrets["Secret store<br/>Fernet, versioned keys"]
+    PG["PostgreSQL"]
+    Redis["Redis"]
+    Blob["Object storage<br/>S3/R2, disk in dev"]
 
     UI --> API
     Agent --> MCP
@@ -61,29 +53,28 @@ graph TB
 
     API --> Engine
     API --> Shells
-    Engine --> RulesMS
-    Engine --> Audit
-    Engine -->|before hooks, gating| Worker
-    Engine -->|after hooks| Worker
-
-    Worker -->|outbound + SSRF guard| Ext
-    Worker --> Secrets
-    Beat --> Worker
-    Worker --> Redis
-    Beat --> Redis
-
     API --> PG
     API --> Blob
+
+    Engine --> RulesMS
+    Engine --> Audit
+    Engine -->|before and after hooks| Worker
     Audit --> PG
+
+    Worker -->|outbound, SSRF guarded| Ext
+    Worker --> Secrets
+    Worker --> Redis
+    Beat --> Worker
+    Beat --> Redis
 
     classDef client fill:#e1f5ff,stroke:#0284c7
     classDef backend fill:#fff3e0,stroke:#ea580c
-    classDef async fill:#ede9fe,stroke:#7c3aed
+    classDef queue fill:#ede9fe,stroke:#7c3aed
     classDef store fill:#f3e5f5,stroke:#a21caf
 
     class UI,Agent,Ext client
     class API,Engine,Shells,Audit backend
-    class Worker,Beat async
+    class Worker,Beat queue
     class MCP,RulesMS,PG,Redis,Blob,Secrets store
 ```
 
