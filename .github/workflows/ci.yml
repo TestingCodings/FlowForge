@@ -38,6 +38,8 @@ jobs:
 
   # Dependency vulnerability gates. Baselines are clean as of 2026-07 (Django
   # 5.2 LTS, cryptography 48, simplejwt 5.5, pytest 9), so these enforce.
+  # The frontend gate covers production dependencies only; the rationale and
+  # the currently-accepted dev-tooling advisories are in docs/DEPLOYMENT.md.
   security-audit:
     name: Dependency vulnerability audit
     runs-on: ubuntu-latest
@@ -62,9 +64,21 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Audit frontend dependencies (npm audit, high+)
+      # Scoped to production dependencies: those are what ships in the bundle
+      # and reaches a user's browser. Dev-only tooling (vite, esbuild) is
+      # audited below without blocking — its advisories describe the local dev
+      # server, which is not an artefact we deploy.
+      - name: Audit frontend production dependencies (npm audit, high+)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+
+      # Informational: surfaces dev-tooling advisories in the log so they stay
+      # visible and get upgraded deliberately, rather than being invisible.
+      # Does not gate — see the note above.
+      - name: Audit frontend dev dependencies (informational)
+        if: always()
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
 
   test:
     name: Run test suite

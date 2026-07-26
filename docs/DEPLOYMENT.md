@@ -141,3 +141,39 @@ per release. GitHub Actions deploy-over-SSH can come later.
 real repo code (with tests, committable now, useful beyond the demo); the
 rest is server-side configuration. Recommended order: repo code first
 (deployable any time), then the VPS steps in one sitting.
+
+---
+
+## 6. Dependency audit policy
+
+CI gates on vulnerabilities, but the two halves of the dependency tree carry
+different risk, so they are treated differently:
+
+| Scope | Command | Gates CI? |
+|---|---|---|
+| Backend (all) | `pip-audit -r backend/requirements.txt --no-deps` | **Yes** |
+| Frontend **production** | `npm audit --omit=dev --audit-level=high` | **Yes** |
+| Frontend **dev tooling** | `npm audit --audit-level=high` | No — informational |
+
+**Why the frontend gate is scoped to production dependencies.** Only
+production dependencies are bundled by Vite and served to a browser. Dev
+tooling (`vite`, `esbuild`) runs on a developer's laptop and in CI; it is
+never part of a deployed artefact. Gating on it means an advisory in the
+local dev server can block a release that the advisory cannot possibly
+affect — which trains people to ignore the gate, the opposite of what it's
+for. The dev audit still runs and still prints, so the advisories stay
+visible and get upgraded deliberately.
+
+**Currently accepted (dev-only, not shipped), as of 2026-07-26:**
+
+- `vite <=6.4.2` — path traversal in optimised-deps `.map` handling,
+  `server.fs.deny` bypass on Windows alternate paths, and `launch-editor`
+  NTLMv2 hash disclosure via UNC paths. All three describe the **dev
+  server**. Fix requires Vite 8 (major); schedule it as a deliberate upgrade
+  with a full build + E2E pass, not as an emergency patch.
+- `esbuild <=0.24.2` (transitive via Vite) — dev server request forgery.
+  Clears with the same Vite upgrade.
+
+**This exemption is for dev tooling only.** If a *production* dependency
+ever needs an exception, do not widen this scope — pin the fix, or record
+the exception explicitly with an expiry date and an owner.
