@@ -25,10 +25,12 @@ export default function WorkflowViewPage() {
   });
 
   const { data: instances = [] } = useQuery<WorkflowInstance[]>({
-    queryKey: ["instances", "by-workflow", id],
-    queryFn: async () =>
-      (await apiClient.get(`/instances/?workflow_definition=${id}`)).data.results ?? [],
-    enabled: Boolean(id),
+    queryKey: ["instances", "by-workflow", id, Boolean(wf?.ui_schema?.computed)],
+    queryFn: async () => {
+      const suffix = wf?.ui_schema?.computed ? "&include=computed" : "";
+      return (await apiClient.get(`/instances/?workflow_definition=${id}${suffix}`)).data.results ?? [];
+    },
+    enabled: Boolean(id && wf),
   });
 
   const transitionMutation = useMutation({

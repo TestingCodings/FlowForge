@@ -37,6 +37,27 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         "parent": ["exact", "isnull"],
     }
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # When ?include=computed is requested, prefetch the relations that
+        # compute_fields() reads so the rollups don't produce N+1 queries.
+        include = (self.request.query_params.get("include") or "").split(",")
+        if "computed" in include:
+            from django.db.models import Prefetch
+            from .models import InstanceRelationship
+            qs = qs.prefetch_related(
+                "children",
+                Prefetch(
+                    "outgoing_relationships",
+                    queryset=InstanceRelationship.objects.select_related("to_instance"),
+                ),
+                Prefetch(
+                    "incoming_relationships",
+                    queryset=InstanceRelationship.objects.select_related("from_instance"),
+                ),
+            )
+        return qs
+
     def create(self, request, *args, **kwargs):
         require_min_role(request.user, "participant", action="create a workflow instance")
         return super().create(request, *args, **kwargs)

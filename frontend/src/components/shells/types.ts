@@ -52,14 +52,18 @@ export { ICON_GLYPHS };
 /**
  * Resolve a grouping key for an instance.
  *
- * Accepts "current_state", "parent", or "metadata.<key>" — the vocabulary
- * shared by matrix rows/columns and kanban swimlanes.
+ * Accepts "current_state", "parent", "metadata.<key>", or "computed.<key>" —
+ * the vocabulary shared by matrix rows/columns and kanban swimlanes.
  */
 export function groupValue(instance: WorkflowInstance, field: string): string {
   if (field === "current_state") return instance.current_state_name ?? "";
   if (field === "parent") return instance.parent_reference ?? "";
   if (field.startsWith("metadata.")) {
     const v = (instance.metadata_json ?? {})[field.slice(9)];
+    return v === undefined || v === null ? "" : String(v);
+  }
+  if (field.startsWith("computed.")) {
+    const v = (instance.computed ?? {})[field.slice(9)];
     return v === undefined || v === null ? "" : String(v);
   }
   return "";
@@ -69,8 +73,19 @@ export function groupValue(instance: WorkflowInstance, field: string): string {
 export function groupLabel(field: string): string {
   if (field === "current_state") return "State";
   if (field === "parent") return "Parent";
-  if (field.startsWith("metadata.")) return field.slice(9);
+  if (field.startsWith("metadata.") || field.startsWith("computed.")) return field.slice(9);
   return field;
+}
+
+/**
+ * Resolve a computed field value for an instance.
+ *
+ * Returns the raw value (number, string, etc.) or null if absent.
+ * Use this in shells rather than reading `instance.computed` directly
+ * so all shells stay in sync if the accessor changes.
+ */
+export function computedValue(instance: WorkflowInstance, key: string): unknown {
+  return (instance.computed ?? {})[key] ?? null;
 }
 
 /** Resolve a card/row title from ui_schema.title_field, falling back to the reference. */

@@ -17,7 +17,7 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 |----|--------|-------|
 | WS-A media backend | ✅ done (TDD from PR #3's spec) | Copilot (tests) + Claude (impl) |
 | WS-B media frontend | ✅ done (PR #5, issue #4) | Copilot |
-| WS-C computed-in-shells | unclaimed | — |
+| WS-C computed-in-shells | ✅ claimed | Copilot |
 | WS-D parallel states | hold (engine-exclusive) | — |
 | WS-E E2E @core | ✅ done (161a0d9) | Claude |
 | WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |

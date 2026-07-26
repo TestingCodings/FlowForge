@@ -82,6 +82,8 @@ export interface WorkflowUiSchema {
   children?: ChildrenConfig;
   matrix?: MatrixConfig;
   instance_view?: InstanceViewConfig;
+  /** Computed field definitions (METAMODEL §2). */
+  computed?: Record<string, Record<string, unknown>>;
 }
 
 /** Per-workflow detail-page configuration (VISION Layer 2 `instance_view`). */

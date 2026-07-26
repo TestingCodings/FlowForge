@@ -7,6 +7,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Computed fields in shells + relationship rollups (WS-C)** — shells now
+  render `computed.<key>` columns/card-fields/axes alongside `metadata.<key>`.
+  The `TableShell`, `KanbanShell`, and `MatrixShell` all read the shared
+  `computedValue` helper in `shells/types.ts`; no per-shell logic is forked.
+  The list endpoint gains an opt-in `?include=computed` query param that
+  prefetches children and relationship links so rollups don't N+1; the default
+  list response is unchanged. Backend: `compute.py` now supports
+  `over: "relationships"` (aggregating across `InstanceRelationship` links,
+  both directions, with an optional `rel_type` filter); the `ui_schema`
+  validator accepts the new `over` value and the optional `rel_type` string;
+  `WorkflowViewPage` automatically opts in when the workflow declares
+  `ui_schema.computed`. Query-count and integration tests added. (PR #6.)
 - **Attachments panel (WS-B)** — drag-and-drop / click-to-browse uploads on an
   instance, image thumbnails, download and delete, wired as an `attachments`
   panel in `instance_view`. Thumbnails and downloads fetch through the
