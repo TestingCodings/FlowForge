@@ -16,14 +16,14 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 | WS | Status | Owner |
 |----|--------|-------|
 | WS-A media backend | ✅ done (TDD from PR #3's spec) | Copilot (tests) + Claude (impl) |
-| WS-B media frontend | 🚧 claimed (in progress) | Copilot |
+| WS-B media frontend | ✅ done (PR #5, issue #4) | Copilot |
 | WS-C computed-in-shells | unclaimed | — |
 | WS-D parallel states | hold (engine-exclusive) | — |
 | WS-E E2E @core | ✅ done (161a0d9) | Claude |
 | WS-F CI hardening | ✅ done (3a98ede + perms hardening) | Claude |
-| WS-G i18n breadth | unclaimed | — |
+| WS-G i18n breadth | ✅ done (ae2ad5e) | Claude |
 | WS-H demo deployment | unclaimed | — |
-| WS-I scene shell | blocked on WS-A/B | — |
+| WS-I scene shell | **unblocked — ready to claim** | — |
 
 ## How to use this
 - **One agent per workstream.** Branch per workstream (`feat/<id>-<slug>`),

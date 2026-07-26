@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { apiClient } from "../api/client";
 import { TaskItem, WorkflowInstance } from "../types/api";
+import { useTranslation } from "../i18n";
 
 /* ─── Recharts dark theme tokens ─── */
 const C_GRID   = "#21262d";
@@ -102,6 +103,7 @@ const STATE_COLOURS = [C_ACCENT, "#818cf8", "#a5b4fc", C_GREEN, "#6fda8a", C_WAR
 
 /* ─── Page ─── */
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<TaskItem[]>({
     queryKey: ["tasks"],
     queryFn: async () => (await apiClient.get("/tasks/")).data.results ?? [],
@@ -130,17 +132,17 @@ export default function DashboardPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Dashboard</h2>
-          <p>Platform overview — instances, tasks, and workflow performance</p>
+          <h2>{t("page.dashboard.title")}</h2>
+          <p>{t("page.dashboard.subtitle")}</p>
         </div>
       </div>
 
       {/* ── Stat cards ── */}
       <div className="stats-grid" style={{ marginBottom: 20 }}>
-        <StatCard colour="accent" label="Open Tasks"       value={openTasks}          sub="Awaiting action" />
-        <StatCard colour="warning" label="Active Instances" value={activeInstances}    sub="In progress" />
-        <StatCard colour="success" label="Completed"        value={completedInstances} sub={`${completionRate}% completion rate`} />
-        <StatCard colour="info"    label="Workflows"        value={activeWorkflows}    sub="Active definitions" />
+        <StatCard colour="accent"  label={t("stat.openTasks")}       value={openTasks}          sub={t("stat.openTasks.sub")} />
+        <StatCard colour="warning" label={t("stat.activeInstances")} value={activeInstances}    sub={t("stat.activeInstances.sub")} />
+        <StatCard colour="success" label={t("stat.completed")}       value={completedInstances} sub={t("stat.completed.sub", { rate: completionRate })} />
+        <StatCard colour="info"    label={t("stat.workflows")}       value={activeWorkflows}    sub={t("stat.workflows.sub")} />
       </div>
 
       {/* ── Charts row ── */}

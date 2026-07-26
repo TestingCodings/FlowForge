@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { login } from "../api/auth";
+import { useTranslation } from "../i18n";
 
 interface LoginForm {
   email: string;
@@ -9,6 +10,7 @@ interface LoginForm {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { register, handleSubmit } = useForm<LoginForm>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export default function LoginPage() {
           <h2 style={{ background: "linear-gradient(135deg, #818cf8, #6366f1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             FlowForge
           </h2>
-          <p>Sign in to your workspace</p>
+          <p>{t("page.login.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)}>

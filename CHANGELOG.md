@@ -7,6 +7,11 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **i18n breadth (WS-G)** — French and German catalogues alongside English and
+  Spanish, and `t()` threaded through the dashboard, workflows, instances, and
+  login pages (page titles, subtitles with interpolation, and the four stat
+  cards). Untranslated strings still fall back to en-GB, so partial catalogues
+  stay safe. Backend `ui_config.locale` allow-list widened to match.
 - **File & image uploads (WS-A)** — `MediaAsset` plus `/api/media/`:
   multipart upload (participant+), list and authenticated download (viewer+),
   delete (uploader or designer+). Security is server-side throughout: the type

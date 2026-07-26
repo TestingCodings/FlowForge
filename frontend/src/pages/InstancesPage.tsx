@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
+import { useTranslation } from "../i18n";
 import { WorkflowInstance, Workflow, Transition, SlaInfo } from "../types/api";
 import { formatDate } from "../hooks/useWorkspace";
 
@@ -34,6 +35,7 @@ function SlaBadge({ sla }: { sla: SlaInfo | null | undefined }) {
 }
 
 export default function InstancesPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [filterWorkflow, setFilterWorkflow] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -143,8 +145,8 @@ export default function InstancesPage() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Instances</h2>
-          <p>{instances.length} total · {activeCount} active · {doneCount} completed</p>
+          <h2>{t("page.instances.title")}</h2>
+          <p>{t("page.instances.subtitle", { total: instances.length, active: activeCount, done: doneCount })}</p>
         </div>
         <button className="btn-primary" onClick={() => setShowCreate(!showCreate)}>
           + New Instance

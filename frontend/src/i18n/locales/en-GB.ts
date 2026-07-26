@@ -34,6 +34,25 @@ export const enGB = {
   "common.completed": "Completed",
   "common.inProgress": "In Progress",
 
+  // Pages
+  "page.dashboard.title": "Dashboard",
+  "page.dashboard.subtitle": "Platform overview — instances, tasks, and workflow performance",
+  "page.workflows.title": "Workflows",
+  "page.workflows.subtitle": "{count} definitions · {active} active",
+  "page.instances.title": "Instances",
+  "page.instances.subtitle": "{total} total · {active} active · {done} completed",
+  "page.login.subtitle": "Sign in to your workspace",
+
+  // Dashboard stats
+  "stat.openTasks": "Open Tasks",
+  "stat.openTasks.sub": "Awaiting action",
+  "stat.activeInstances": "Active Instances",
+  "stat.activeInstances.sub": "In progress",
+  "stat.completed": "Completed",
+  "stat.completed.sub": "{rate}% completion rate",
+  "stat.workflows": "Workflows",
+  "stat.workflows.sub": "Active definitions",
+
   // {n} is interpolated by the t() function.
   "instances.count": "{n} instances",
 } as const;
