@@ -98,3 +98,9 @@ def test_existing_schema_still_valid():
         "children": {"workflows": ["Sub Task"], "shell": "table", "roll_up": True},
     }
     assert validate_ui_schema(schema) is None
+
+
+def test_attachments_panel_is_valid():
+    """The frontend advertises an `attachments` panel (WS-B); the backend
+    allow-list must accept it or the panel can never be explicitly ordered."""
+    assert validate_ui_schema({"instance_view": {"panels": ["state_graph", "attachments"]}}) is None

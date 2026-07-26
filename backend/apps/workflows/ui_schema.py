@@ -37,9 +37,10 @@ VALID_ICONS = (
     "clock", "star", "flag", "lock", "search", "edit", "inbox", "archive",
 )
 
+# Keep in sync with InstancePanel in frontend/src/types/api.ts.
 VALID_PANELS = (
     "description", "metadata", "comments", "state_graph", "timeline",
-    "forms", "children", "relationships", "tasks",
+    "forms", "attachments", "children", "relationships", "tasks",
 )
 
 VALID_LAYOUTS = ("sidebar", "stacked")

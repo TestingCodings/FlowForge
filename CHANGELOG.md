@@ -7,6 +7,11 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
 ## [Unreleased]
 
 ### Added
+- **Attachments panel (WS-B)** — drag-and-drop / click-to-browse uploads on an
+  instance, image thumbnails, download and delete, wired as an `attachments`
+  panel in `instance_view`. Thumbnails and downloads fetch through the
+  authenticated API as blobs, since asset URLs are private, never public.
+  (Contributed via PR #5.)
 - **i18n breadth (WS-G)** — French and German catalogues alongside English and
   Spanish, and `t()` threaded through the dashboard, workflows, instances, and
   login pages (page titles, subtitles with interpolation, and the four stat
