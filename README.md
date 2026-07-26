@@ -11,60 +11,91 @@ FlowForge is a configurable workflow automation platform that lets teams define 
 ## Highlights
 
 - **Model any process, no code** - states, transitions, and a rules engine, authored on a visual React Flow canvas *or* as diffable YAML with a live preview.
-- **Six presentation shells** - the same workflow renders as a list, kanban board (drag-to-transition), table, calendar, TestRail-style matrix, or Typeform-style stepped form, chosen per workflow via `ui_schema`.
-- **White-labelling** - theme presets, light/dark, fonts, date formats, density, and i18n (English + Spanish) per workspace.
-- **Structured data** - per-state forms that gate transitions and feed the rules engine; instance containers (workflows nesting workflows) with roll-up progress.
+- **Seven presentation shells** - the same workflow renders as a list, kanban board (drag-to-transition), table, calendar, TestRail-style matrix, Typeform-style stepped form, or a visual-novel scene player, chosen per workflow via `ui_schema`.
+- **White-labelling** - theme presets, light/dark, fonts, date formats, density, and i18n (English, Spanish, French, German) per workspace.
+- **Structured data** - per-state forms that gate transitions and feed the rules engine; instance containers (workflows nesting workflows) with roll-up progress; computed fields that derive values across children *and* relationships.
+- **Files and images** - uploads with server-side magic-byte type checking, EXIF stripped by re-encoding, UUID storage keys, and authenticated downloads (asset URLs are never public).
 - **Governance** - five-tier RBAC enforced at the API layer, an immutable audit trail, and scheduled SLA-breach enforcement.
-- **Integrations, both directions** - HMAC-signed outbound webhooks and inbound triggers (external systems create instances or fire transitions through a secret URL), plus an encrypted secret store.
+- **Integrations, both directions** - HMAC-signed outbound webhooks, inbound triggers (external systems create instances or fire transitions through a secret URL), and action hooks that call external systems *before* a transition (gating it on the response) or after it commits - all with an encrypted secret store and an SSRF guard.
+- **Agent-ready** - an MCP server exposing ten tools, so an AI assistant can read workflows, author them from YAML, and drive instances.
 - **System map** - a cross-workflow topology view of how instances actually connect, exportable as a PNG.
-- **Production-hardened** - async webhook delivery with retries, optimistic locking, form-schema versioning, a rules-service circuit breaker, and a Playwright + backend test suite gating CI.
+- **Production-hardened** - async delivery with retries, optimistic locking (`If-Match`/409), form-schema versioning, a rules-service circuit breaker, and a Playwright + 338-test backend suite gating CI.
 
 ---
 
 ## Architecture
 
 ```mermaid
-graph LR
-    UI["🎨 React Pages & Components"]
-    TQ["📊 TanStack Query"]
-    RF["🖼️ React Flow Canvas"]
-    
-    API["🔌 REST API<br/>(Django 5 + DRF)"]
-    Engine["⚙️ Workflow Engine"]
-    RulesMS["⚡ Rules Service<br/>(FastAPI)"]
-    AuditSvc["📝 Audit Service"]
-    Perms["🔐 Role Layer"]
-    Celery["👷 Celery Workers"]
-    
-    PG["🗄️ PostgreSQL"]
-    Redis["🔴 Redis"]
-    
-    UI --> TQ
-    TQ --> API
-    RF --> API
-    
+graph TB
+    subgraph clients["Clients"]
+        UI["🎨 React 18 + TypeScript<br/>TanStack Query · React Flow"]
+        Agent["🤖 AI agent<br/>(MCP client)"]
+        Ext["🌐 External systems"]
+    end
+
+    subgraph django["Django 5.2 + DRF"]
+        API["🔌 REST API<br/>JWT · 5-tier RBAC"]
+        Engine["⚙️ Workflow engine<br/>validate → hooks → commit"]
+        Shells["🖼️ ui_schema<br/>7 shells · computed fields"]
+        Audit["📝 Immutable audit log"]
+    end
+
+    subgraph async["Async (Celery)"]
+        Worker["👷 Worker<br/>hooks · webhooks · notifications"]
+        Beat["⏰ Beat<br/>SLA checks · retries"]
+    end
+
+    subgraph stores["Services & stores"]
+        MCP["🔗 MCP server<br/>(FastMCP, 10 tools)"]
+        RulesMS["⚡ Rules service<br/>(FastAPI + local fallback)"]
+        PG["🗄️ PostgreSQL"]
+        Redis["🔴 Redis"]
+        Blob["📦 Object storage<br/>(S3/R2 · disk in dev)"]
+        Secrets["🔐 Secret store<br/>(Fernet, versioned keys)"]
+    end
+
+    UI --> API
+    Agent --> MCP --> API
+    Ext -->|"inbound triggers"| API
+
     API --> Engine
-    API --> Perms
-    API --> Celery
-    
+    API --> Shells
     Engine --> RulesMS
-    Engine --> AuditSvc
-    
-    Celery --> Redis
-    
+    Engine --> Audit
+    Engine -->|"before hooks (gating)"| Worker
+    Engine -->|"after hooks"| Worker
+
+    Worker -->|"outbound + SSRF guard"| Ext
+    Worker --> Secrets
+    Beat --> Worker
+    Worker --> Redis
+    Beat --> Redis
+
     API --> PG
-    RulesMS --> PG
-    
-    classDef frontend fill:#e1f5ff
-    classDef backend fill:#fff3e0
-    classDef services fill:#f3e5f5
-    
-    class UI,TQ,RF frontend
-    class API,Engine,Perms,AuditSvc,Celery backend
-    class RulesMS,PG,Redis services
+    API --> Blob
+    Audit --> PG
+
+    classDef client fill:#e1f5ff,stroke:#0284c7
+    classDef core fill:#fff3e0,stroke:#ea580c
+    classDef queue fill:#ede9fe,stroke:#7c3aed
+    classDef store fill:#f3e5f5,stroke:#a21caf
+
+    class UI,Agent,Ext client
+    class API,Engine,Shells,Audit core
+    class Worker,Beat queue
+    class MCP,RulesMS,PG,Redis,Blob,Secrets store
 ```
 
-**Request path:** the React frontend talks exclusively to the Django REST API over JWT-authenticated requests. When a transition fires, the workflow engine evaluates any blocking rules by calling the FastAPI rules microservice (with a local Python fallback when the service is not running). Every state change, comment, and metadata edit is written to the immutable audit log. Celery handles async work such as notification delivery.
+**Request path.** The React frontend talks exclusively to the Django REST API over JWT-authenticated requests; an MCP client reaches the same API through the MCP server, so agents get no privileged back door.
+
+**Transition path** — the one flow worth understanding, because everything else composes onto it:
+
+1. **Validate** — the transition must be legal from the current state, any required form must be submitted, and rules are evaluated (via the FastAPI rules service, falling back to local Python behind a circuit breaker when it's unavailable). A rule can block with a human-readable reason.
+2. **`before` hooks** run *outside* the transaction — they may call external systems, so holding a DB transaction open across a network call would be a mistake. A failing hook can abort the transition.
+3. **Commit** — atomically, re-checking under `select_for_update` that the instance hasn't moved since validation, so a concurrent transition can't be clobbered. Rule `set_metadata` values and hook outputs merge into the instance here.
+4. **`after` hooks, webhooks, notifications** are queued to Celery post-commit, with retries and a delivery log.
+
+Every state change, comment, and metadata edit lands in the immutable audit log. Outbound calls of every kind pass a shared SSRF guard that rejects private, loopback, and link-local addresses.
 
 ---
 
@@ -72,17 +103,22 @@ graph LR
 
 | Layer | Technology |
 |---|---|
-| Backend API | Django 5.0 + Django REST Framework |
+| Backend API | Django 5.2 LTS + Django REST Framework 3.16 |
 | Authentication | JWT via `djangorestframework-simplejwt` |
-| Rule engine | FastAPI microservice (Python fallback built in) |
-| Task queue | Celery + Redis |
+| Rule engine | FastAPI microservice (local Python fallback + circuit breaker) |
+| Task queue | Celery 5.4 + Redis (worker for hooks/webhooks, beat for SLAs) |
 | Database | PostgreSQL (production) / SQLite (local dev, no Docker needed) |
-| Frontend | React 18 + TypeScript + Vite |
+| Encryption | `cryptography` (Fernet, versioned keys) for the secret store |
+| Media | Pillow (magic-byte sniffing + EXIF-stripping re-encode); `django-storages` → S3/R2 in production |
+| Agent interface | MCP server (`FastMCP`) exposing 10 tools |
+| Frontend | React 18 + TypeScript 5 + Vite 5 |
 | Server state | TanStack Query (react-query v5) |
-| Workflow canvas | `@xyflow/react` (React Flow v12) |
+| Workflow canvas | `@xyflow/react` (React Flow v12) + dagre auto-layout |
 | Charts | Recharts |
 | Routing | react-router-dom v6 |
-| CI | GitHub Actions |
+| Testing | pytest-django (338 tests) + Playwright with playwright-bdd (Gherkin) |
+| CI | GitHub Actions (tests, typecheck, E2E, dependency audit) |
+| Deployment | Docker Compose + Caddy (automatic TLS) |
 
 ---
 
@@ -91,7 +127,7 @@ graph LR
 | Feature | Detail |
 |---|---|
 | Visual Workflow Builder | Drag-and-drop canvas: draw states, connect transitions, set SLA hours and role requirements, save to the API |
-| Rule Engine | Per-workflow rules with 10 operators (`gt`, `lt`, `eq`, `contains`, `is_true` ...) that block transitions or auto-assign roles based on live instance metadata |
+| Rule Engine | Per-workflow rules with 10 operators (`gt`, `lt`, `eq`, `contains`, `is_true` ...) evaluated against live instance metadata **plus injected hierarchy facts** (`children_total`, `children_open`, `children_complete`). Actions: `block_transition` (with a human-readable reason surfaced in the UI), `assign_role`, and `set_metadata` to stamp values onto the instance as part of the transition |
 | State Graph | BFS-topological SVG diagram on every instance: green = path taken, grey = branch not reached, indigo pulse = current state |
 | Relationship Fields | Directional typed links between instances (`reported_in`, `blocks`, `part_of` ...) with debounced search picker and audit on both ends |
 | State Forms | Attach a typed, validated form to any state; required forms block transitions until submitted; values merge into metadata for rule evaluation; visual form editor |
@@ -105,10 +141,20 @@ graph LR
 | Bulk Operations | Select up to 100 instances: fire one transition across all with per-instance results, or export the selection (with flattened metadata columns) as CSV |
 | Instance Containers | Nest instances inside instances (Release contains Test Runs contains Bug Reports): per-workflow allow-lists, roll-up progress on the parent, breadcrumb navigation, and rules that gate parent transitions until children complete |
 | Workspace Theming | White-label the platform: name, tagline, logo, four theme presets (incl. light mode), 15 colour tokens, font, and date format - edited live with instant preview (Layer 1) |
-| UI Shells | Present any workflow as a list, kanban board (drag-to-transition), sortable table, or calendar - configured visually per workflow with per-state colours; every shell defers to the engine so rules, approvals, and forms gate every move (Layer 2) |
+| UI Shells | Present any workflow as a list, kanban board (drag-to-transition), sortable table, calendar, TestRail-style matrix, Typeform-style stepped form, or visual-novel scene player - configured per workflow via `ui_schema` with per-state colours and icons; every shell defers to the engine, so rules, approvals, and forms gate every move (Layer 2) |
+| File & Image Uploads | Attach files to any instance. Type is decided by **magic-byte sniffing** (a renamed executable is rejected), images are **re-encoded through Pillow** to strip EXIF and defuse polyglots, storage keys are UUIDs so a crafted filename can't shape the path, and the internal file path is never serialised - downloads route through an authenticated endpoint, never a bucket URL |
+| Computed Fields | Read-only derived values defined in `ui_schema.computed`: rollups (`sum`/`min`/`max`/`avg`/`count`) over children **or typed relationships**, `age_days`, and `if` conditionals. Resolved at read time so they can't drift, rendered in shells via an opt-in `?include=computed` that prefetches to avoid N+1, and injected into the data rules see - so a rule can gate on a rollup |
+| Action Hooks | Call external systems as part of a transition. `after` hooks fire post-commit (async, retried, can write the response back into metadata); `before` hooks run synchronously *ahead* of the state change and can **block** it - a health-check gate. Templating resolves `{{secret.NAME}}`, `{{metadata.key}}`, and instance fields; secrets are redacted from every log |
+| Secret Store | Write-only encrypted credentials (`/api/secrets/`): values are never returned by the API, encrypted at rest with Fernet under **versioned keys** (rotatable without downtime), and fail closed when no key is configured |
+| Inbound Triggers | External systems create instances or fire transitions through a secret URL, with per-trigger throttling - the inbound counterpart to webhooks |
+| SSRF Guard | Every outbound call (webhooks, action hooks, probes) resolves the target and refuses private, loopback, and link-local addresses, with an optional host allow-list |
+| Topology View | A cross-workflow map of how instances actually connect - parent/child containment plus typed relationships - focusable on any instance and exportable as a PNG |
+| Optimistic Locking | Metadata edits carry `If-Match`; a stale write gets a 409 instead of silently clobbering a concurrent edit |
+| i18n | English, Spanish, French, and German catalogues with `{placeholder}` interpolation and en-GB fallback, so partial translations stay safe |
+| MCP Server | Ten tools (`list_workflows`, `get_workflow`, `list_instances`, `get_instance`, `search_instances`, `get_topology`, `validate_workflow_yaml`, `create_workflow_from_yaml`, `create_instance`, `fire_transition`) letting an AI agent read, author, and drive workflows through the same authenticated API - no privileged back door |
 | Export / Import | Download any workflow as a portable `.flowforge.json` bundle (states, transitions, rules, forms, UI schema, name-based references) and import it on any FlowForge install (Layer 3 foundation) |
 | Demo User Switcher | Flip between admin/approver/participant in one browser tab to demonstrate role differences live |
-| Seed Command | `python manage.py seed --reset` - idempotent demo data with full audit trails; `--testrail` adds a three-workflow test management suite |
+| Seed Commands | `python manage.py seed --reset` - idempotent demo data with full audit trails; `--testrail` adds a three-workflow test-management suite; `seed_demo_story` adds a two-ending branching story for the scene shell |
 
 ---
 
@@ -122,6 +168,16 @@ graph LR
 | **Visual Workflow Builder** | **Inline Rule Builder** |
 | ![Relationships](docs/screenshots/relationships_table.png) | ![SLA Indicators](docs/screenshots/instances_sla.png) |
 | **Instance Relationships panel** | **SLA breach indicators** |
+| ![Kanban board](docs/screenshots/kanban_board.png) | ![Rule blocking a drag](docs/screenshots/kanban_rule_blocked.png) |
+| **Kanban shell — drag to transition** | **A rule refusing the move, with its reason** |
+| ![Table shell](docs/screenshots/table_shell.png) | ![Calendar shell](docs/screenshots/calendar_shell.png) |
+| **Table shell with metadata columns** | **Calendar shell** |
+| ![Presentation panel](docs/screenshots/presentation_panel.png) | ![Workspace theming](docs/screenshots/workspace_theming.png) |
+| **Choosing a shell per workflow (`ui_schema`)** | **White-label theming, live preview** |
+| ![Form editor](docs/screenshots/form_editor.png) | ![Form blocking a transition](docs/screenshots/form_blocked.png) |
+| **Visual form editor** | **A required form gating a transition** |
+| ![Children panel](docs/screenshots/children_panel.png) | ![Webhooks](docs/screenshots/webhooks_panel.png) |
+| **Instance containers with roll-up** | **Webhook subscriptions + delivery log** |
 
 ---
 
@@ -204,16 +260,25 @@ Seeds three linked workflows (Test Run, Bug Report, Release) with pre-populated 
 FlowForge/
 ├── backend/
 │   ├── apps/
-│   │   ├── accounts/       # Users, roles, JWT auth, permission layer
+│   │   ├── accounts/       # Users, roles, JWT auth, permission layer, workspace
 │   │   ├── audit/          # Immutable audit log and service helpers
+│   │   ├── forms/          # Per-state form definitions, versioning, validation
 │   │   ├── instances/      # Workflow instances, transitions, relationships
-│   │   ├── notifications/  # Notification templates and delivery log
+│   │   ├── media/          # MediaAsset uploads: sniffing, EXIF stripping, downloads
+│   │   ├── notifications/  # Webhooks, action hooks, SSRF guard, delivery log
+│   │   ├── secrets/        # Fernet-encrypted secret store with key versioning
 │   │   ├── tasks/          # Per-state task assignment
-│   │   └── workflows/      # Definitions, states, transitions, rules, engine
-│   └── config/settings/
-│       ├── base.py
-│       ├── local.py        # CI / PostgreSQL settings
-│       └── local_sqlite.py # No-Docker local dev settings
+│   │   └── workflows/      # Definitions, states, transitions, rules, engine,
+│   │                       #   ui_schema, computed fields, portability
+│   ├── config/
+│   │   ├── celery.py       # Celery app (worker + beat entrypoint)
+│   │   └── settings/
+│   │       ├── base.py
+│   │       ├── local.py        # CI / PostgreSQL settings
+│   │       ├── local_sqlite.py # No-Docker local dev settings
+│   │       ├── production.py
+│   │       └── demo.py         # Public demo: throttles, no registration, SSRF allow-list
+│   └── tests/              # pytest-django suite (338 tests)
 ├── frontend/
 │   └── src/
 │       ├── components/     # AppLayout, StateGraph, ProtectedRoute
@@ -221,9 +286,19 @@ FlowForge/
 │       ├── api/            # Axios client with JWT interceptors
 │       └── types/          # Shared TypeScript interfaces
 ├── rules-service/          # FastAPI rule evaluation microservice
+├── mcp-server/             # MCP server (10 tools) exposing FlowForge to AI agents
+├── e2e/                    # Playwright + Gherkin feature files and step definitions
 ├── docs/
 │   ├── VISION.md           # Platform architecture and three-layer roadmap
+│   ├── METAMODEL.md        # Computed fields, topology, parallel states
+│   ├── HOOKS.md            # Secret store and action hooks
+│   ├── MEDIA.md            # Uploads and the visual-novel scene shell
+│   ├── DEPLOYMENT.md       # Public demo deployment + what is/isn't verified
+│   ├── TESTING.md          # E2E strategy
+│   ├── PARALLEL-DEV.md     # Workstream board for concurrent development
 │   └── screenshots/
+├── docker-compose.prod.yml # Production stack (Caddy, worker, beat)
+├── Caddyfile               # TLS + reverse proxy
 └── .github/workflows/ci.yml
 ```
 
