@@ -60,13 +60,18 @@ export function groupValue(instance: WorkflowInstance, field: string): string {
   if (field === "parent") return instance.parent_reference ?? "";
   if (field.startsWith("metadata.")) {
     const v = (instance.metadata_json ?? {})[field.slice(9)];
-    return v === undefined || v === null ? "" : String(v);
+    return _toStr(v);
   }
   if (field.startsWith("computed.")) {
     const v = (instance.computed ?? {})[field.slice(9)];
-    return v === undefined || v === null ? "" : String(v);
+    return _toStr(v);
   }
   return "";
+}
+
+/** Coerce an arbitrary field value to a display string (empty on null/undefined). */
+function _toStr(v: unknown): string {
+  return v === undefined || v === null ? "" : String(v);
 }
 
 /** Human label for a grouping field, for headers and legends. */

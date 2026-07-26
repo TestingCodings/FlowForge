@@ -61,7 +61,7 @@ export default function TableShell({ workflow, instances }: ShellProps) {
   const header = (col: string) =>
     BUILTIN_LABELS[col] ?? (
       col.startsWith("metadata.") || col.startsWith("computed.")
-        ? col.slice(col.indexOf(".") + 1)
+        ? col.slice(9)
         : col
     );
 

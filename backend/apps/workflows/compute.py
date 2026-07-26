@@ -67,6 +67,19 @@ def _rel_numbers(instance, field: str, rel_type=None) -> list[float]:
     return out
 
 
+def _agg(expr: str, vals: list[float]):
+    """Apply sum/min/max/avg to a list of floats; returns None for empty non-sum."""
+    if expr == "sum":
+        return sum(vals)
+    if not vals:
+        return None
+    if expr == "min":
+        return min(vals)
+    if expr == "max":
+        return max(vals)
+    return round(sum(vals) / len(vals), 4)  # avg
+
+
 def _evaluate(instance, spec: dict):
     expr = spec.get("expr")
 
@@ -74,32 +87,14 @@ def _evaluate(instance, spec: dict):
         return instance.children.count()
 
     if expr in ("sum", "min", "max", "avg") and spec.get("over") == "children":
-        vals = _child_numbers(instance, spec.get("field", ""))
-        if expr == "sum":
-            return sum(vals)
-        if not vals:
-            return None
-        if expr == "min":
-            return min(vals)
-        if expr == "max":
-            return max(vals)
-        return round(sum(vals) / len(vals), 4)
+        return _agg(expr, _child_numbers(instance, spec.get("field", "")))
 
     if expr == "count" and spec.get("over") == "relationships":
         return len(_relationship_instances(instance, spec.get("rel_type")))
 
     if expr in ("sum", "min", "max", "avg") and spec.get("over") == "relationships":
         rel_type = spec.get("rel_type")
-        vals = _rel_numbers(instance, spec.get("field", ""), rel_type)
-        if expr == "sum":
-            return sum(vals)
-        if not vals:
-            return None
-        if expr == "min":
-            return min(vals)
-        if expr == "max":
-            return max(vals)
-        return round(sum(vals) / len(vals), 4)
+        return _agg(expr, _rel_numbers(instance, spec.get("field", ""), rel_type))
 
     if expr == "age_days":
         src = spec.get("from", "created_at")
