@@ -9,6 +9,7 @@ import WebhooksPanel from "../components/WebhooksPanel";
 import TriggersPanel from "../components/TriggersPanel";
 import HooksPanel from "../components/HooksPanel";
 import PresentationPanel from "../components/PresentationPanel";
+import SceneEditor from "../components/SceneEditor";
 import { formatDate } from "../hooks/useWorkspace";
 
 /**
@@ -831,6 +832,8 @@ export default function WorkflowDetailPage() {
           </div>
         )}
       </div>
+
+      {wf.ui_schema?.shell === "scene" && <SceneEditor workflow={wf} />}
 
       {/* ── Webhooks ── */}
       <PresentationPanel workflow={wf} />
