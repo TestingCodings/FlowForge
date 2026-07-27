@@ -24,6 +24,8 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 | WS-G i18n breadth | ✅ done (ae2ad5e) | Claude |
 | WS-H demo deployment | **code done** (VPS steps pending) | Claude |
 | WS-I scene shell | **done** | Claude |
+| WS-J scene authoring UI | in progress (issue #8) | Copilot |
+| WS-K app content as data | in progress | Claude |
 
 ## How to use this
 - **One agent per workstream.** Branch per workstream (`feat/<id>-<slug>`),
