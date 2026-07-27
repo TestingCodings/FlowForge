@@ -376,3 +376,10 @@ export interface MediaAsset {
   created_at: string;
   download_url: string;
 }
+
+/** Public demo metadata from /api/demo-info/ — empty on real deployments. */
+export interface DemoInfo {
+  demo_mode: boolean;
+  notice: string;
+  accounts: { email: string; password: string; role: string }[];
+}

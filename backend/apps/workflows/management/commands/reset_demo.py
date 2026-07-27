@@ -43,11 +43,46 @@ class Command(BaseCommand):
             if options["story"]:
                 call_command("seed_demo_story", "--reset", stdout=_Sink())
 
+            self._apply_deployed_passwords()
+
         self.stdout.write(self.style.SUCCESS("Demo reset complete."))
         self.stdout.write(
             "Accounts and workflows restored. Credentials are intentionally "
             "not logged; they are shown on the demo login page."
         )
+
+
+    def _apply_deployed_passwords(self):
+        """Re-point the seeded accounts at the deployment's own passwords.
+
+        `seed` sets passwords that live in a public source file, so a public
+        demo running them would effectively publish its own admin login. When
+        DEMO_ACCOUNTS is configured (an env var, never source — see
+        config/settings/demo.py) the matching users are updated to those
+        passwords instead.
+
+        Unconfigured means unchanged, so local development keeps the seed's
+        credentials and nothing about the dev experience shifts.
+        """
+        from django.conf import settings
+
+        from apps.accounts.models import User
+
+        accounts = getattr(settings, "DEMO_ACCOUNTS", []) or []
+        updated = 0
+        for account in accounts:
+            email, password = account.get("email"), account.get("password")
+            if not email or not password:
+                continue
+            user = User.objects.filter(email=email).first()
+            if user is None:
+                continue  # configured for an account this seed doesn't create
+            user.set_password(password)
+            user.save(update_fields=["password"])
+            updated += 1
+
+        if updated:
+            self.stdout.write(f"Applied deployment passwords to {updated} account(s).")
 
 
 class _Sink:

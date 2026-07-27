@@ -119,3 +119,32 @@ class TestScheduledResetGuard:
         with override_settings(DEMO_MODE=True):
             assert reset_demo_scheduled() == "demo reset"
         assert WorkflowDefinition.objects.exists()
+
+
+@pytest.mark.django_db
+class TestDeployedPasswordsDifferFromSeed:
+    """The seed's passwords are in a public file. A public demo must not use
+    them, or the repo effectively publishes its own admin login."""
+
+    def test_reset_applies_passwords_from_demo_accounts(self):
+        from django.test import override_settings
+
+        accounts = [{"email": "admin@flowforge.dev", "password": "Deployed-Only-9!", "role": "Admin"}]
+        with override_settings(DEMO_ACCOUNTS=accounts):
+            _run()
+
+        user = User.objects.get(email="admin@flowforge.dev")
+        assert user.check_password("Deployed-Only-9!")
+        assert not user.check_password("Admin1234!"), "seed password still works"
+
+    def test_seed_passwords_stand_when_nothing_is_configured(self):
+        """Local dev has no DEMO_ACCOUNTS and must keep working unchanged."""
+        _run()
+        assert User.objects.get(email="admin@flowforge.dev").check_password("Admin1234!")
+
+    def test_unknown_emails_are_ignored(self):
+        from django.test import override_settings
+
+        with override_settings(DEMO_ACCOUNTS=[{"email": "ghost@nowhere.dev", "password": "x"}]):
+            _run()  # must not raise
+        assert not User.objects.filter(email="ghost@nowhere.dev").exists()

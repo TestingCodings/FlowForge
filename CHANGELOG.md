@@ -42,6 +42,21 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   topology view and a README screenshot, but a fresh install showed both as
   empty.
 
+### Security
+- **Demo credentials no longer live in source.** The login page hard-coded
+  `admin@flowforge.dev / Admin1234!`, and the help page rendered a table of
+  all four accounts including the platform admin — working logins in public
+  files, shown to every visitor. Both now read a new public
+  `/api/demo-info/` endpoint, which serves accounts only when the deployment
+  sets `DEMO_MODE`; configuring accounts is deliberately not sufficient, so a
+  stray setting on a real deployment publishes nothing. The accounts
+  themselves come from a `DEMO_ACCOUNTS` env var read at deploy time.
+  `reset_demo` now re-points the seeded users at those passwords, so a public
+  demo never runs the ones `seed.py` publishes. Unconfigured means unchanged,
+  so local dev keeps the seed's credentials. The MCP server's `.env.example`
+  and README used a real working password as their example; both are now
+  placeholders.
+
 ### Added
 - **Creator/user UI split** (docs/ROLES.md §3) — the same workflow can now
   present a designer's page and an end user's page. `ui_schema.instance_view`

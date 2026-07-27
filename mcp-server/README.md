@@ -56,7 +56,7 @@ least-privilege role for anything beyond local demoing.
       "env": {
         "FLOWFORGE_API_URL": "http://localhost:8000/api",
         "FLOWFORGE_EMAIL": "admin@flowforge.dev",
-        "FLOWFORGE_PASSWORD": "Admin1234!"
+        "FLOWFORGE_PASSWORD": "your-password-here"
       }
     }
   }

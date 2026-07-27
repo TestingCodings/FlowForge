@@ -118,3 +118,27 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=3, minute=0),  # 03:00 UTC; CELERY_TIMEZONE=UTC
     },
 }
+
+# ── Demo accounts shown on the login page ───────────────────────────────────
+# Served by /api/demo-info/ so the login page doesn't have to hard-code them.
+# Format: "email:password:Label,email:password:Label" — supplied as an env var
+# at deploy time, so working credentials never live in the repository.
+#
+# Empty by default: a demo that forgets to set this shows no accounts, which
+# is a visible, harmless failure. The alternative default — the seed's own
+# passwords — would put them back in source, which is the thing this exists
+# to avoid.
+def _parse_demo_accounts(raw: str) -> list[dict]:
+    accounts = []
+    for entry in raw.split(","):
+        parts = entry.strip().split(":")
+        if len(parts) >= 2 and parts[0] and parts[1]:
+            accounts.append({
+                "email": parts[0],
+                "password": parts[1],
+                "role": parts[2] if len(parts) > 2 else "",
+            })
+    return accounts
+
+
+DEMO_ACCOUNTS = _parse_demo_accounts(config("DEMO_ACCOUNTS", default=""))

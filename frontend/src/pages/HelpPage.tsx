@@ -1,3 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { apiClient } from "../api/client";
+import { DemoInfo } from "../types/api";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -21,7 +25,7 @@ const SECTIONS = [
     id: "quickstart",
     title: "Quick start (5-minute demo)",
     content: [
-      { type: "step", n: "1", text: "Log in as admin@flowforge.dev / Admin1234!" },
+      { type: "step", n: "1", text: "Sign in with an administrator account." },
       { type: "step", n: "2", text: "Open Workflows → Insurance Claim. Note the state graph and the rule that blocks claims over £10,000." },
       { type: "step", n: "3", text: "Click + New CLM to create a new insurance claim instance." },
       { type: "step", n: "4", text: "Open the new instance. In the Metadata panel, add a field claim_value = 15000, then save." },
@@ -309,6 +313,13 @@ function renderContent(item: any, i: number) {
 
 /* ─── Page ─── */
 export default function HelpPage() {
+  // Public endpoint; empty on any non-demo deployment.
+  const { data: demo } = useQuery<DemoInfo>({
+    queryKey: ["demo-info"],
+    queryFn: async () => (await apiClient.get("/demo-info/")).data,
+    staleTime: Infinity,
+    retry: false,
+  });
   const [activeSection, setActiveSection] = useState("overview");
 
   return (
@@ -352,27 +363,28 @@ export default function HelpPage() {
             </div>
           ))}
 
-          {/* Demo credentials */}
-          <div className="card" style={{ background: "rgba(99,102,241,0.05)", borderColor: "rgba(99,102,241,0.25)" }}>
-            <h3 style={{ marginBottom: 14, fontSize: "1rem" }}>Demo credentials</h3>
-            <table className="table" style={{ fontSize: "0.83rem" }}>
-              <thead><tr><th>Email</th><th>Password</th><th>Roles</th></tr></thead>
-              <tbody>
-                {[
-                  { email: "admin@flowforge.dev",  pw: "Admin1234!", roles: "platform_admin" },
-                  { email: "alice@flowforge.dev",  pw: "Alice1234!", roles: "approver" },
-                  { email: "bob@flowforge.dev",    pw: "Bob12345!",  roles: "participant" },
-                  { email: "carol@flowforge.dev",  pw: "Carol123!",  roles: "approver" },
-                ].map(u => (
-                  <tr key={u.email}>
-                    <td style={{ fontFamily: "monospace" }}>{u.email}</td>
-                    <td style={{ fontFamily: "monospace" }}>{u.pw}</td>
-                    <td><span className={`badge badge-role-${u.roles}`}>{u.roles}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Demo credentials — served by /api/demo-info/, which returns
+              them only when the deployment sets DEMO_MODE. They used to be
+              hard-coded here, which shipped working logins (including the
+              platform admin) in a public source file and rendered them to
+              every visitor. */}
+          {demo?.demo_mode && demo.accounts.length > 0 && (
+            <div className="card" style={{ background: "rgba(99,102,241,0.05)", borderColor: "rgba(99,102,241,0.25)" }}>
+              <h3 style={{ marginBottom: 14, fontSize: "1rem" }}>Demo credentials</h3>
+              <table className="table" style={{ fontSize: "0.83rem" }}>
+                <thead><tr><th>Email</th><th>Password</th><th>Role</th></tr></thead>
+                <tbody>
+                  {demo.accounts.map(u => (
+                    <tr key={u.email}>
+                      <td style={{ fontFamily: "monospace" }}>{u.email}</td>
+                      <td style={{ fontFamily: "monospace" }}>{u.password}</td>
+                      <td>{u.role}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

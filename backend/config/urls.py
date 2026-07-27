@@ -19,7 +19,7 @@ from apps.notifications.views import (
 )
 from apps.tasks.views import TaskViewSet
 from apps.workflows.views import WorkflowDefinitionViewSet, RuleViewSet, StateViewSet, TransitionViewSet
-from .health import health_check
+from .health import demo_info, health_check
 
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
@@ -54,4 +54,5 @@ urlpatterns = [
     path("api/", include(router.urls)),
     # Health
     path("api/health/", health_check, name="health-check"),
+    path("api/demo-info/", demo_info, name="demo-info"),
 ]
