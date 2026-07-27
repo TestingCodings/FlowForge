@@ -61,7 +61,13 @@ class TestParseDsl:
         rule = bundle["rules"][0]
         assert rule["transition"] == "Approve"
         assert rule["condition"] == {"field": "amount", "operator": "gt", "value": 5000}
-        assert rule["action"] == {"block_transition": True}
+        # The engine dispatches on action["type"], so the DSL's
+        # `then: {block_transition: true}` shorthand must be translated.
+        # This previously asserted the raw shorthand, which meant the test
+        # passed while every YAML-authored blocking rule silently never
+        # fired — it checked the parser agreed with itself rather than that
+        # the engine would honour the result.
+        assert rule["action"] == {"type": "block_transition"}
 
         assert len(bundle["forms"]) == 1
         assert bundle["forms"][0]["state"] == "Manager Review"
