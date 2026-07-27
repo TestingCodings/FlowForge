@@ -71,7 +71,12 @@ When("I save the scene editor without changes", async ({ page }) => {
   const response = await responsePromise;
   const text = await response.text();
   let json: unknown = null;
-  try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (err) {
+    console.warn("Could not parse scene save response as JSON:", err);
+    json = text;
+  }
   (page as any)._lastSceneSave = { status: response.status(), json };
 });
 

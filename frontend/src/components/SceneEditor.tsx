@@ -52,10 +52,10 @@ function serialiseSceneConfig(config: SceneConfig): SceneConfig {
     if (scene.music !== undefined && scene.music !== "") serialised.music = scene.music;
 
     const sprites = (scene.sprites ?? []).map((sprite) => {
-        const nextSprite: SceneSprite = { asset: sprite.asset };
-        if (sprite.position) nextSprite.position = sprite.position;
-        return nextSprite;
-      });
+      const nextSprite: SceneSprite = { asset: sprite.asset };
+      if (sprite.position) nextSprite.position = sprite.position;
+      return nextSprite;
+    });
     if (sprites.length) serialised.sprites = sprites;
 
     if (Object.keys(serialised).length > 0) next[stateName] = serialised;
@@ -322,7 +322,7 @@ export default function SceneEditor({ workflow }: Props) {
                   )}
                 </div>
                 <p className="text-xs text-muted" style={{ marginBottom: 10 }}>
-                  Positions must use British spelling: <code>left</code>, <code>centre</code>, <code>right</code>.
+                  The API requires these exact values: <code>left</code>, <code>centre</code>, <code>right</code>.
                 </p>
                 {stateErrors.sprites && <div className="alert alert-error mb-2">{stateErrors.sprites}</div>}
 

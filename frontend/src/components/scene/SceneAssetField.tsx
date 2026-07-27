@@ -27,7 +27,8 @@ export default function SceneAssetField({
   const { data: assets = [] } = useQuery<MediaAsset[]>({
     queryKey: ["workflow-media-assets", workflowId],
     queryFn: async () => {
-      const resp = await apiClient.get(`/media/?workflow_definition=${workflowId}`);
+      const qs = new URLSearchParams({ workflow_definition: workflowId });
+      const resp = await apiClient.get(`/media/?${qs.toString()}`);
       return resp.data.results ?? resp.data ?? [];
     },
     enabled: Boolean(workflowId),
