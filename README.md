@@ -344,5 +344,3 @@ See [docs/VISION.md](docs/VISION.md) for the platform architecture vision, [docs
   to third parties as a competing hosted service or commercial product.
 - **Converts to Apache 2.0** on 2030-07-21.
 
-Versions up to commit `633def5` were released under the MIT License and remain
-available under those terms in the git history.
