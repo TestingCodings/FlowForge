@@ -1,0 +1,26 @@
+# Northwind Facilities — app identity.
+#
+# Applied to the Workspace singleton by `manage.py load_app demo`. When the
+# App bundle lands (docs/APPS.md Phase 3) this file should be absorbed into
+# it rather than sitting alongside — see the risk noted in DEMO-PHASE1.md §5.
+name: Northwind Facilities
+tagline: Facilities Management
+logo_url: ""
+
+ui_config:
+  locale: en-GB
+  density: comfortable
+  date_format: dd/mm/yyyy
+  font: inter
+  theme:
+    accent: "#0f766e"
+    accent-light: "#14b8a6"
+
+# Loaded in order. Later files may reference earlier workflows by name
+# (containment allow-lists, relationship targets).
+workflows:
+  - asset-register.yaml
+  - maintenance-request.yaml
+  - incident-report.yaml
+
+instances: instances.yaml

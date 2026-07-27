@@ -1,0 +1,70 @@
+# The hero workflow — the first thing a prospect sees. Kanban so that
+# drag-to-transition demos in two seconds with no explanation.
+workflow: Maintenance Request
+prefix: MNT
+description: Reactive and planned maintenance jobs raised against an asset
+
+states:
+  - name: Reported
+    role: participant
+    sla_hours: 4
+  - name: Triaged
+    role: approver
+    sla_hours: 8
+  - name: Scheduled
+    role: participant
+    sla_hours: 24
+  - name: In Progress
+    role: participant
+    sla_hours: 48
+    form:
+      name: Completion Report
+      required_to_transition: true
+      fields:
+        - {name: work_done, type: textarea, label: Work carried out, required: true}
+        - {name: cost, type: currency, label: Parts and labour, required: false, min: 0}
+        # The file-field work: evidence is a real attachment, not a pasted link.
+        - {name: evidence_photo, type: image, label: Photo of completed work, required: false}
+  - name: Complete
+    terminal: true
+  - name: Cancelled
+    terminal: true
+
+transitions:
+  - Reported -> Triaged: Triage
+  - Triaged -> Scheduled:
+      name: Schedule
+      rules:
+        # The reason reads as an instruction, not an error — a blocked
+        # transition is the clearest place to teach someone the process.
+        - if: {field: engineer, op: is_false}
+          then:
+            block_transition: true
+            reason: Assign an engineer before scheduling this job.
+  - Scheduled -> In Progress: Start Work
+  - In Progress -> Complete:
+      name: Complete Job
+      requires_approval: true
+  - Reported -> Cancelled: Cancel
+  - Triaged -> Cancelled: Cancel at Triage
+
+ui:
+  shell: kanban
+  title_field: summary
+  card_fields: [priority, engineer, site]
+  state_display:
+    Reported: {colour: "#f59e0b", icon: alert}
+    Triaged: {colour: "#6366f1", icon: search}
+    Scheduled: {colour: "#0ea5e9", icon: clock}
+    In Progress: {colour: "#14b8a6", icon: play}
+    Complete: {colour: "#22c55e", icon: check}
+    Cancelled: {colour: "#94a3b8", icon: x}
+  computed:
+    days_open:
+      expr: age_days
+  instance_view:
+    panels: [state_graph, forms, attachments, relationships, timeline]
+    panels_by_role:
+      # An engineer is doing the work, not inspecting the design.
+      participant: [forms, attachments]
+      viewer: [timeline]

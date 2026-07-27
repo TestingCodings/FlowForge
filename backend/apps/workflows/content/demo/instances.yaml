@@ -1,0 +1,78 @@
+# Demo instances.
+#
+# `advance` fires real transitions through the engine rather than setting
+# current_state directly. That is deliberate and non-negotiable: it is what
+# gives every instance a believable timeline and audit trail, and the audit
+# trail is one of the strongest things to show a prospect. Writing the state
+# directly would make it a lie.
+#
+# `ref` is a local handle used by the relationships block below; it is stored
+# in metadata so tests and later files can find the instance again.
+
+instances:
+  - workflow: Asset Register
+    ref: chiller-01
+    creator: admin@flowforge.dev
+    metadata:
+      asset_name: Chiller Unit 01
+      site: Meridian House
+      installed: "2019-04-11"
+    advance: []
+
+  - workflow: Asset Register
+    ref: lift-03
+    creator: admin@flowforge.dev
+    metadata:
+      asset_name: Passenger Lift 03
+      site: Brook Street
+      installed: "2021-09-02"
+    advance: [Take Out of Service]
+
+  - workflow: Maintenance Request
+    ref: in-progress-job
+    creator: bob@flowforge.dev
+    parent: chiller-01
+    metadata:
+      summary: Chiller losing pressure overnight
+      priority: P1
+      site: Meridian House
+      engineer: R. Okafor
+    advance: [Triage, Schedule, Start Work]
+
+  - workflow: Maintenance Request
+    ref: blocked-job
+    creator: bob@flowforge.dev
+    parent: chiller-01
+    metadata:
+      summary: Replace corroded pipework
+      priority: P3
+      site: Meridian House
+      # No engineer: the Schedule rule blocks this one, so the demo has a
+      # live example of a rule refusing a move rather than a described one.
+    advance: [Triage]
+
+  - workflow: Maintenance Request
+    ref: lift-job
+    creator: bob@flowforge.dev
+    parent: lift-03
+    metadata:
+      summary: Lift door sensor intermittent
+      priority: P2
+      site: Brook Street
+      engineer: S. Whitfield
+    advance: [Triage, Schedule]
+
+  - workflow: Incident Report
+    ref: water-ingress
+    creator: bob@flowforge.dev
+    metadata:
+      summary: Water ingress in plant room following chiller fault
+      severity: Medium
+    advance: [Open Investigation]
+
+# Cross-workflow links. These are what make the topology view show one
+# company rather than three unrelated demos.
+relationships:
+  - from: water-ingress
+    to: in-progress-job
+    type: arose_from

@@ -109,6 +109,41 @@ def _normalise_condition(cond, errors, line):
     return cond
 
 
+def _normalise_action(action, errors, line):
+    """Translate DSL `then:` shorthand into the engine's action shape.
+
+    The engine dispatches on `action["type"]`. The DSL's documented syntax is
+    a shorthand key — `then: {block_transition: true}` — which compiled
+    straight through, so the rule imported cleanly and then never fired. A
+    workflow could look perfectly configured while its gates did nothing.
+
+    The engine form (`{type: ...}`) is passed through untouched, so an author
+    who knows it can write it directly.
+    """
+    if "type" in action:
+        return action
+
+    if "block_transition" in action:
+        out = {"type": "block_transition"}
+        # BUILDER.md documented `message`; the engine reads `reason`.
+        reason = action.get("reason") or action.get("message")
+        if reason:
+            out["reason"] = reason
+        return out
+
+    if "assign_role" in action:
+        return {"type": "assign_role", "role": action["assign_role"]}
+
+    if "set_metadata" in action:
+        return {"type": "set_metadata", "values": action["set_metadata"]}
+
+    errors.append(
+        f"line {line}: unknown rule action {sorted(k for k in action)!r} — "
+        "expected block_transition, assign_role or set_metadata"
+    )
+    return action
+
+
 def parse_dsl(text: str) -> dict:
     """Compile DSL text into a portability bundle dict.
 
@@ -257,7 +292,7 @@ def parse_dsl(text: str) -> dict:
             rules.append({
                 "transition": tname,
                 "condition": _strip_lines(condition),
-                "action": _strip_lines(action),
+                "action": _normalise_action(_strip_lines(action), errors, rline),
                 "priority": int(rule.get("priority", 100)),
             })
 

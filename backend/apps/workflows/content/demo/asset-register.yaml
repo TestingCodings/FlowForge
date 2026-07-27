@@ -1,0 +1,39 @@
+# The container: Maintenance Requests nest under an Asset, and the computed
+# fields roll up from those children — which is what makes containment
+# quantitative rather than decorative.
+workflow: Asset Register
+prefix: AST
+description: Plant and equipment across Northwind sites
+
+states:
+  - name: In Service
+    role: participant
+  - name: Under Repair
+    role: participant
+  - name: Retired
+    terminal: true
+
+transitions:
+  - In Service -> Under Repair: Take Out of Service
+  - Under Repair -> In Service: Return to Service
+  - In Service -> Retired: Retire
+  - Under Repair -> Retired: Scrap
+
+ui:
+  shell: table
+  title_field: asset_name
+  list_columns: [reference, state, metadata.site, computed.open_jobs]
+  children:
+    workflows: [Maintenance Request]
+    shell: table
+    roll_up: true
+  computed:
+    open_jobs:
+      expr: count
+      over: children
+    total_repair_cost:
+      expr: sum
+      over: children
+      field: metadata.cost
+  instance_view:
+    panels: [state_graph, children, timeline]

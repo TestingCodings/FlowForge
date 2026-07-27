@@ -1,0 +1,30 @@
+# Deliberately small. Its job is to give the topology view something real to
+# draw and to prove that hooks exist.
+workflow: Incident Report
+prefix: INC
+description: Health and safety incidents, linked to the job that surfaced them
+
+states:
+  - name: Logged
+    role: participant
+    sla_hours: 2
+  - name: Investigating
+    role: approver
+    sla_hours: 24
+  - name: Closed
+    terminal: true
+
+transitions:
+  - Logged -> Investigating: Open Investigation
+  - Investigating -> Closed:
+      name: Close
+      requires_approval: true
+
+ui:
+  shell: list
+  title_field: summary
+  computed:
+    days_open:
+      expr: age_days
+  instance_view:
+    panels: [state_graph, relationships, timeline]
