@@ -43,6 +43,22 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   empty.
 
 ### Added
+- **Creator/user UI split** (docs/ROLES.md §3) — the same workflow can now
+  present a designer's page and an end user's page. `ui_schema.instance_view`
+  gains `panels_by_role`, overriding `panels` for a given role; anything not
+  listed falls back, so existing workflows are untouched and configuring a
+  workflow doesn't become a chore. When a user holds several roles the most
+  senior override wins rather than a union — the point is to show *less* to
+  lesser roles, so a designer who is also a participant still gets the
+  designer's view. A typo'd role key is rejected at validation rather than
+  silently never matching, which would read as a broken feature.
+
+  Alongside it, a `useCapabilities` hook puts UI permission checks in one
+  place instead of role literals scattered across pages, and creator-only
+  affordances are now hidden rather than shown-and-broken — starting with the
+  "Workflow settings" link, which took end users to a page they cannot use.
+  These checks decide what to *render*; the API still enforces every one
+  server-side.
 - **`file` / `image` form fields** — a form field can now hold a real
   uploaded file instead of a pasted link. The stored value is a **MediaAsset
   id**, so the reference is durable, access-controlled, and verifiably

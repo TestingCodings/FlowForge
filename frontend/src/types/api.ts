@@ -115,6 +115,13 @@ export interface InstanceViewConfig {
   title_field?: string;
   /** Which panels to render, in order. Omitted = platform default set. */
   panels?: InstancePanel[];
+  /**
+   * Per-role overrides (docs/ROLES.md §3). A role listed here sees this set
+   * instead of `panels`; anyone else falls back to `panels`. Falling back
+   * rather than requiring every role to be declared keeps configuring a
+   * workflow from becoming a chore.
+   */
+  panels_by_role?: Partial<Record<RoleName, InstancePanel[]>>;
   /** "sidebar" (default) or "stacked". */
   layout?: "sidebar" | "stacked";
 }

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../api/client";
+import { useCan } from "../hooks/useCapabilities";
 import { Transition, Workflow, WorkflowInstance } from "../types/api";
 import { SHELL_REGISTRY } from "../components/shells";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -13,6 +14,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
  * presentation and call back through the ShellProps contract.
  */
 export default function WorkflowViewPage() {
+  const can = useCan();
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -75,9 +77,13 @@ export default function WorkflowViewPage() {
               : `${instances.length} instances · ${shellLabel.toLowerCase()} view`}
           </p>
         </div>
-        <Link to={`/workflows/${id}`} className="btn-secondary btn-sm" style={{ textDecoration: "none" }}>
-          Workflow settings
-        </Link>
+        {/* Creator-only: this leads to the designer's page, which an end user
+            can neither use nor is meant to see. */}
+        {can("workflow.design") && (
+          <Link to={`/workflows/${id}`} className="btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+            Workflow settings
+          </Link>
+        )}
       </div>
 
       {error && (

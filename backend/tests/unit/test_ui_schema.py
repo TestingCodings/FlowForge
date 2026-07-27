@@ -165,3 +165,54 @@ def test_sprite_position_must_be_known():
         {"scene_config": {"Awakening": {"sprites": [{"asset": "x", "position": "center"}]}}}
     )
     assert err and "left, centre, right" in err
+
+
+# ---------------------------------------------------------------------------
+# instance_view.panels_by_role — the creator/user split (docs/ROLES.md §3)
+# ---------------------------------------------------------------------------
+
+
+def test_panels_by_role_accepted():
+    schema = {
+        "instance_view": {
+            "panels": ["description", "metadata", "state_graph"],
+            "panels_by_role": {
+                "participant": ["description", "forms", "attachments"],
+                "viewer": ["description", "timeline"],
+            },
+        }
+    }
+    assert validate_ui_schema(schema) is None
+
+
+def test_panels_by_role_is_optional():
+    """Existing workflows define only `panels`; they must keep working."""
+    assert validate_ui_schema({"instance_view": {"panels": ["description"]}}) is None
+
+
+def test_panels_by_role_must_be_an_object():
+    err = validate_ui_schema({"instance_view": {"panels_by_role": ["viewer"]}})
+    assert err and "panels_by_role" in err
+
+
+def test_panels_by_role_rejects_unknown_panel():
+    err = validate_ui_schema(
+        {"instance_view": {"panels_by_role": {"viewer": ["description", "gantt"]}}}
+    )
+    assert err and "gantt" in err and "viewer" in err
+
+
+def test_panels_by_role_rejects_unknown_role():
+    """A typo'd role would silently never match, showing the default panels
+    forever — which looks like the feature is broken rather than misconfigured."""
+    err = validate_ui_schema(
+        {"instance_view": {"panels_by_role": {"aprover": ["description"]}}}
+    )
+    assert err and "aprover" in err
+
+
+def test_panels_by_role_value_must_be_a_list():
+    err = validate_ui_schema(
+        {"instance_view": {"panels_by_role": {"viewer": "description"}}}
+    )
+    assert err and "viewer" in err

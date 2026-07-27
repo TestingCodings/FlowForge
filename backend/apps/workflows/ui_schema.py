@@ -178,6 +178,12 @@ def validate_ui_schema(ui_schema) -> str | None:
                     f"Unknown instance_view panel(s): {', '.join(unknown)}. "
                     f"Valid: {', '.join(VALID_PANELS)}."
                 )
+        by_role = instance_view.get("panels_by_role")
+        if by_role is not None:
+            role_error = _validate_panels_by_role(by_role)
+            if role_error:
+                return role_error
+
         layout = instance_view.get("layout")
         if layout is not None and layout not in VALID_LAYOUTS:
             return (
@@ -226,4 +232,44 @@ def _validate_scene_config(scene_config) -> str | None:
                         f"{where}.sprites[{i}].position must be one of: "
                         f"{', '.join(VALID_SPRITE_POSITIONS)}."
                     )
+    return None
+
+
+# Keep in sync with RoleName in apps/accounts/models.py. Once roles become
+# data (docs/ROLES.md) this becomes a lookup rather than a constant.
+VALID_ROLE_KEYS = (
+    "platform_admin", "workflow_designer", "participant", "approver", "viewer",
+)
+
+
+def _validate_panels_by_role(by_role) -> str | None:
+    """Validate per-role panel overrides (docs/ROLES.md §3).
+
+    Lets one workflow present a designer's view and a participant's view
+    without forking the page: `panels` remains the default, and a role listed
+    here overrides it. Falling back rather than requiring every role to be
+    declared is what keeps this from becoming busywork on every workflow.
+
+    Unknown role keys are rejected rather than ignored — a typo would
+    silently never match, leaving the default panels in place, which reads as
+    "the feature is broken" instead of "the config has a typo".
+    """
+    if not isinstance(by_role, dict):
+        return "ui_schema.instance_view.panels_by_role must be an object keyed by role."
+
+    for role, panels in by_role.items():
+        where = f"ui_schema.instance_view.panels_by_role['{role}']"
+        if role not in VALID_ROLE_KEYS:
+            return (
+                f"Unknown role '{role}' in panels_by_role. "
+                f"Valid: {', '.join(VALID_ROLE_KEYS)}."
+            )
+        if not _is_str_list(panels):
+            return f"{where} must be a list of non-empty strings."
+        unknown = [p for p in panels if p not in VALID_PANELS]
+        if unknown:
+            return (
+                f"Unknown panel(s) for role '{role}': {', '.join(unknown)}. "
+                f"Valid: {', '.join(VALID_PANELS)}."
+            )
     return None

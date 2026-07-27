@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import FormFileField from "../components/FormFileField";
 import {
-  WorkflowInstance, Transition, AuditEntry, UserProfile, InstancePanel,
+  WorkflowInstance, Transition, AuditEntry, UserProfile, InstancePanel, RoleName,
   InstanceRelationship, InstanceSearchResult, CurrentForm, FormField,
 } from "../types/api";
 import StateGraph from "../components/StateGraph";
@@ -104,7 +104,22 @@ export default function InstanceDetailPage() {
     "state_graph", "forms", "attachments", "children", "relationships", "timeline",
   ];
   const instanceView = workflow?.ui_schema?.instance_view;
-  const orderedPanels: InstancePanel[] = (instanceView?.panels ?? DEFAULT_PANELS)
+
+  /* Per-role panel overrides (docs/ROLES.md §3). A participant shouldn't be
+     shown the same page as the person who designed the workflow.
+
+     When a user holds several roles the most senior override wins, not a
+     union: the point is to show *less* to lesser roles, so a designer who is
+     also a participant must still get the designer's view. */
+  const ROLE_SENIORITY: RoleName[] = [
+    "platform_admin", "workflow_designer", "approver", "participant", "viewer",
+  ];
+  const roleOverride = ROLE_SENIORITY
+    .filter(r => myRoles.includes(r))
+    .map(r => instanceView?.panels_by_role?.[r])
+    .find(panels => panels !== undefined);
+
+  const orderedPanels: InstancePanel[] = (roleOverride ?? instanceView?.panels ?? DEFAULT_PANELS)
     // "description"/"metadata"/"comments" live in the fixed two-column grid
     // above; only the standalone panels participate in ordering.
     .filter((p: InstancePanel): p is InstancePanel => DEFAULT_PANELS.includes(p));
