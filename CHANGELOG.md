@@ -42,6 +42,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   topology view and a README screenshot, but a fresh install showed both as
   empty.
 
+### Fixed
+- **"View as YAML" produced text that could not be re-imported.** Two
+  independent faults in `export_dsl`, both silent: it never emitted the `ui:`
+  key (which `parse_dsl` has always read), so a round-trip dropped the shell,
+  per-role panels, computed fields and scene config and the workflow came back
+  looking unconfigured; and it built its lines with f-strings, so any value
+  containing a colon — "A story: told in scenes" — or starting with a YAML
+  indicator produced a document that failed to parse. Scalars now go through
+  `safe_dump`, so quoting is PyYAML's problem rather than ours, and the
+  transition key is quoted as a whole since it embeds two state names. Every
+  workflow in a populated database now round-trips exactly.
+
 ### Security
 - **Demo credentials no longer live in source.** The login page hard-coded
   `admin@flowforge.dev / Admin1234!`, and the help page rendered a table of

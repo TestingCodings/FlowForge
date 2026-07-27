@@ -332,14 +332,30 @@ def lint_bundle(bundle: dict) -> list[str]:
     return warnings
 
 
+def _scalar(value) -> str:
+    """Render a scalar as YAML, quoting only when necessary.
+
+    export_dsl built its lines with f-strings, so a value containing a colon
+    ("A story: told in scenes") or starting with a YAML indicator emitted text
+    that re-import rejected. The UI showed it as valid YAML; pasting it back
+    failed. Delegating to safe_dump means the quoting rules are PyYAML's
+    rather than ours.
+    """
+    dumped = yaml.safe_dump(
+        value, default_flow_style=True, allow_unicode=True, width=10000,
+    )
+    # safe_dump ends a bare scalar document with an explicit "..." marker.
+    return dumped.replace("\n...\n", "").strip()
+
+
 def export_dsl(bundle: dict) -> str:
     """Render a bundle back to DSL text (round-trip for 'View as YAML')."""
     wf = bundle.get("workflow", {})
-    lines = [f"workflow: {wf.get('name', '')}"]
+    lines = [f"workflow: {_scalar(wf.get('name', ''))}"]
     if wf.get("reference_prefix"):
-        lines.append(f"prefix: {wf['reference_prefix']}")
+        lines.append(f"prefix: {_scalar(wf['reference_prefix'])}")
     if wf.get("description"):
-        lines.append(f"description: {wf['description']}")
+        lines.append(f"description: {_scalar(wf['description'])}")
     if not wf.get("is_active", True):
         lines.append("active: false")
 
@@ -352,7 +368,7 @@ def export_dsl(bundle: dict) -> str:
     states = bundle.get("states", [])
     first_initial = bool(states) and states[0].get("is_initial")
     for i, s in enumerate(states):
-        lines.append(f"  - name: {s['name']}")
+        lines.append(f"  - name: {_scalar(s['name'])}")
         if s.get("is_initial") and not (i == 0 and first_initial):
             lines.append("    initial: true")
         if s.get("is_terminal"):
@@ -381,13 +397,17 @@ def export_dsl(bundle: dict) -> str:
     lines.append("")
     lines.append("transitions:")
     for t in bundle.get("transitions", []):
+        # The key embeds both state names, so a colon in either would split
+        # the mapping. Quote the whole key when it can't stand bare.
         key = f"{t['from_state']} -> {t['to_state']}"
+        if ":" in key or key.strip() != key:
+            key = _scalar(key)
         t_rules = rules_by_transition.get(t["name"], [])
         if not t.get("requires_approval") and not t_rules:
-            lines.append(f"  - {key}: {t['name']}")
+            lines.append(f"  - {key}: {_scalar(t['name'])}")
             continue
         lines.append(f"  - {key}:")
-        lines.append(f"      name: {t['name']}")
+        lines.append(f"      name: {_scalar(t['name'])}")
         if t.get("requires_approval"):
             lines.append("      requires_approval: true")
         if t_rules:
@@ -405,5 +425,17 @@ def export_dsl(bundle: dict) -> str:
         lines.append("")
         lines.append("# Workflow-scoped rules are not expressible in the DSL yet;")
         lines.append("# re-add them via the rules editor after import.")
+
+    # Presentation config. `parse_dsl` has always read this key; not emitting
+    # it meant "View as YAML" → re-import silently dropped the shell, per-role
+    # panels, computed fields and scene config. Dumped wholesale rather than
+    # field-by-field so new ui_schema keys round-trip without touching this.
+    ui_schema = wf.get("ui_schema") or {}
+    if ui_schema:
+        lines.append("")
+        ui_block = yaml.safe_dump(
+            {"ui": ui_schema}, sort_keys=False, allow_unicode=True, width=10000,
+        ).rstrip("\n")
+        lines.append(ui_block)
 
     return "\n".join(lines) + "\n"
