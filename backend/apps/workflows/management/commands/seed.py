@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand
 
 from apps.accounts.models import Role, RoleName, User, UserRole
 from apps.workflows.models import Rule, State, Transition, WorkflowDefinition
-from apps.instances.models import WorkflowInstance
+from apps.instances.models import InstanceRelationship, WorkflowInstance
 from apps.workflows.engine import perform_transition
 from apps.audit.services import instance_created, transition_applied
 
@@ -289,6 +289,45 @@ class Command(BaseCommand):
         parser.add_argument("--quiet",    action="store_true", help="Suppress per-row output")
         parser.add_argument("--testrail", action="store_true", help="Also seed TestRail-replacement example workflows")
 
+    def _seed_relationships(self, quiet):
+        """Link the TestRail instances to each other.
+
+        Relationships are a headline feature with their own instance panel and
+        the topology view, but nothing seeded any — so a fresh install showed
+        an empty panel and an empty map, and the topology E2E scenario could
+        never pass. These are the documented directions: a bug is reported in
+        a test run, and a test run is part of a release.
+        """
+        bugs = list(WorkflowInstance.objects.filter(
+            workflow_definition__name="Bug Report").order_by("reference_number"))
+        runs = list(WorkflowInstance.objects.filter(
+            workflow_definition__name="Test Run").order_by("reference_number"))
+        releases = list(WorkflowInstance.objects.filter(
+            workflow_definition__name="Release").order_by("reference_number"))
+        author = User.objects.filter(email="alice@flowforge.dev").first()
+
+        pairs = []
+        for i, bug in enumerate(bugs):
+            if runs:
+                pairs.append((bug, runs[i % len(runs)], "reported_in"))
+        for i, run in enumerate(runs):
+            if releases:
+                pairs.append((run, releases[i % len(releases)], "part_of"))
+
+        created = 0
+        for src, dst, rel_type in pairs:
+            _, was_created = InstanceRelationship.objects.get_or_create(
+                from_instance=src, to_instance=dst, rel_type=rel_type,
+                defaults={"created_by": author},
+            )
+            created += int(was_created)
+            if was_created and not quiet:
+                self.stdout.write(
+                    f"  {src.reference_number} --{rel_type}--> {dst.reference_number}"
+                )
+        self.stdout.write(self.style.SUCCESS(f"  {created} relationship(s) created."))
+
+
     def handle(self, *args, **options):
         quiet    = options["quiet"]
         testrail = options["testrail"]
@@ -313,6 +352,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.HTTP_INFO("\nSeeding TestRail-replacement workflows..."))
             for wf_spec in TESTRAIL_WORKFLOWS:
                 self._seed_workflow(wf_spec, quiet)
+            self._seed_relationships(quiet)
 
         self.stdout.write(self.style.SUCCESS("\nSeed complete."))
         self.stdout.write("")

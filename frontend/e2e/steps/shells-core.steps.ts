@@ -2,9 +2,24 @@ import { expect } from "@playwright/test";
 import { Given, When, Then, apiFetch } from "./fixtures";
 
 /**
- * @core shell steps. Each scenario reconfigures a DIFFERENT seeded workflow's
- * ui_schema (table → Employee Leave Request, matrix → Test Run, list → Test)
- * so parallel workers never mutate the same row.
+ * @core shell steps. These reconfigure a workflow's ui_schema, which is
+ * shared mutable state, so each scenario must own a workflow no other spec
+ * reads:
+ *
+ *   table  → Employee Leave Request
+ *   matrix → Test Run
+ *   list   → Release
+ *
+ * Two rules, both learned the hard way:
+ *
+ * 1. Every workflow named here must exist in `manage.py seed --testrail`,
+ *    which is what CI runs. This once pointed at a workflow called "Test"
+ *    that the seed has never created — it passed only on a developer machine
+ *    that happened to have one by hand, so the suite could never go green on
+ *    a clean database.
+ * 2. Don't pick a workflow another feature asserts against. "Bug Report"
+ *    looks free but workflows.feature opens it and expects an "Open kanban
+ *    view" action, which changing the shell here would break.
  */
 
 async function configureShell(page: any, workflowName: string, uiSchemaPatch: Record<string, unknown>) {
@@ -31,7 +46,7 @@ Given(
 );
 
 Given("a workflow configured with the {string} shell", async ({ page }, shell: string) => {
-  await configureShell(page, "Test", { shell });
+  await configureShell(page, "Release", { shell });
 });
 
 Given(
@@ -58,9 +73,21 @@ Then("I see a row per suite", async ({ page }) => {
 });
 
 Then("I see a column per state", async ({ page }) => {
+  // The matrix only renders columns for states that instances actually
+  // occupy, not every state the workflow defines — so a fixed number was
+  // never satisfiable (Test Run defines 5 states but its seeded instances
+  // sit in 3). Derive the expectation from the data instead.
+  // Filter by the id the Given step stashed — the API filters on
+  // workflow_definition by id only, so a name filter would be ignored and
+  // silently return every instance in the system.
+  const wfId = (page as any)._shellWorkflowId;
+  const insts = await apiFetch(page, "GET", `/instances/?workflow_definition=${wfId}`);
+  const rows = ((insts.json as any).results ?? insts.json) as any[];
+  const occupied = new Set(rows.map((i) => i.current_state_name)).size;
   const headers = page.locator("table thead th");
-  // suite label column + one per workflow state (Test Run has 5 states)
-  expect(await headers.count()).toBeGreaterThanOrEqual(5);
+  await expect(headers.first()).toBeVisible();
+  // One label column for the row axis, plus one per occupied state.
+  expect(await headers.count()).toBe(occupied + 1);
 });
 
 Then("cells show state-coloured instance chips", async ({ page }) => {
@@ -68,15 +95,15 @@ Then("cells show state-coloured instance chips", async ({ page }) => {
 });
 
 When("I filter the list by a reference substring", async ({ page }) => {
-  // The seeded "Test" workflow's instances carry the default WFF prefix.
-  await page.getByPlaceholder(/filter by reference/i).fill("WFF");
+  // Must match the workflow the list-shell scenario configures above.
+  await page.getByPlaceholder(/filter by reference/i).fill("REL");
 });
 
 Then("only matching instances remain", async ({ page }) => {
   const rows = page.locator(".card > div[style*='cursor']");
   await expect(rows.first()).toBeVisible();
   for (const text of await rows.allTextContents()) {
-    expect(text).toMatch(/WFF/);
+    expect(text).toMatch(/REL/);
   }
   // And a non-matching filter empties the list with the no-match message.
   await page.getByPlaceholder(/filter by reference/i).fill("zzz-no-match");

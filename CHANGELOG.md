@@ -30,6 +30,17 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   sub-instance would have wedged the nightly reset permanently. Instances are
   now deleted leaves-first.
 - Workspace `default_view` now accepts `scene`, matching `VALID_SHELLS`.
+- **The E2E suite could never pass on a clean database.** Three `@core`
+  scenarios asserted against data `manage.py seed` has never produced: a
+  workflow named "Test" that only ever existed by hand on one developer
+  machine, a matrix column count that assumed every workflow state is
+  occupied (the shell only renders states instances actually sit in), and at
+  least one instance relationship — of which the seed created **none**.
+  The suite now runs green against a freshly-seeded database (24 scenarios).
+  The seed creates eight relationships (`reported_in`, `part_of`), which also
+  fills a real demo gap: relationships have their own instance panel, a
+  topology view and a README screenshot, but a fresh install showed both as
+  empty.
 
 ### Added
 - **`file` / `image` form fields** — a form field can now hold a real
