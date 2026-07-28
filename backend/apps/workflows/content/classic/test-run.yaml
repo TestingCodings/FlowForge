@@ -1,0 +1,55 @@
+workflow: Test Run
+prefix: TRN
+description: A test execution run against a specific build. Tracks overall pass/fail status and blocks release if failures exist.
+
+states:
+  - name: Planning
+    sla_hours: 24
+    role: workflow_designer
+  - name: In Progress
+    sla_hours: 72
+    role: participant
+    form:
+      name: Test Results
+      required_to_transition: true
+      fields:
+      - name: cases_executed
+        type: number
+        required: true
+        label: Cases executed
+        min: 0
+      - name: fail_count
+        type: number
+        required: true
+        label: Failures recorded
+        min: 0
+      - name: evidence_url
+        type: text
+        required: false
+        label: Evidence link
+      - name: environment_ok
+        type: checkbox
+        required: true
+        label: Environment stable throughout run?
+  - name: Passed
+    terminal: true
+    no_task: true
+  - name: Failed
+    terminal: true
+    no_task: true
+  - name: Blocked
+    terminal: true
+    no_task: true
+
+transitions:
+  - In Progress -> Blocked: Mark Blocked
+  - In Progress -> Failed: Mark Failed
+  - In Progress -> Passed:
+      name: Mark Passed
+      requires_approval: true
+      rules:
+        - {if: {field: fail_count, operator: gt, value: 0}, then: {type: block_transition, reason: This run has recorded failures. Resolve all failed test cases before marking the run as Passed.}, priority: 1}
+        - {if: {field: block_count, operator: gt, value: 0}, then: {type: block_transition, reason: This run has blocked test cases. Unblock or remove them before closing as Passed.}, priority: 2}
+  - Failed -> In Progress: Reopen
+  - Blocked -> In Progress: Reopen Blocked
+  - Planning -> In Progress: Start Run

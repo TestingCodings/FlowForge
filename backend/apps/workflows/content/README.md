@@ -40,3 +40,23 @@ python manage.py load_app demo            # refuses if already loaded
 python manage.py load_app demo --reset    # replace, deleting its instances
 python manage.py load_app demo --skip-identity   # leave workspace branding alone
 ```
+
+## Regenerating content from a database
+
+The `classic/` files were produced by exporting the seeded workflows through
+`export_dsl`, so they're the round-trip's own output rather than hand
+transcription.
+
+**Generate from a freshly seeded database, never your working one.** The E2E
+suite rewrites `ui_schema` on several seeded workflows as part of its shell
+scenarios (Employee Leave Request → table, Test Run → matrix, Release →
+list). Exporting a development database captured those mutations as if they
+were the seed's own output, and the equivalence test caught it. Run
+`manage.py seed --reset --testrail` first.
+
+## The safety net
+
+`tests/integration/test_seed_port_equivalence.py` asserts that
+`load_app classic` builds the same states, transitions, rules and ui_schema
+as `seed --testrail`. Keep it passing: it's the evidence that the YAML path
+is faithful, and it's what makes it safe to move more content out of Python.

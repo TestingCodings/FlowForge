@@ -1,0 +1,59 @@
+workflow: Insurance Claim
+prefix: CLM
+description: Multi-tier claim assessment with value-based routing and escalation
+
+states:
+  - name: New Claim
+    sla_hours: 24
+    role: participant
+  - name: Under Review
+    sla_hours: 48
+    role: approver
+    form:
+      name: Claim Assessment
+      required_to_transition: true
+      fields:
+      - name: assessed_value
+        type: number
+        required: true
+        label: Assessed value (£)
+        min: 0
+      - name: policy_valid
+        type: checkbox
+        required: true
+        label: Policy checked and valid?
+      - name: assessor_notes
+        type: textarea
+        required: false
+        label: Assessor notes
+      - name: evidence_reviewed
+        type: checkbox
+        required: true
+        label: Supporting evidence reviewed?
+  - name: Director Approval
+    sla_hours: 24
+    role: approver
+  - name: Approved
+    terminal: true
+    no_task: true
+  - name: Rejected
+    terminal: true
+    no_task: true
+  - name: Paid Out
+    terminal: true
+    no_task: true
+
+transitions:
+  - Under Review -> Approved:
+      name: Approve Standard
+      requires_approval: true
+      rules:
+        - {if: {field: claim_value, operator: gt, value: 10000}, then: {type: block_transition, reason: 'Claims over £10,000 require Director approval. Use Escalate instead.'}, priority: 1}
+  - Director Approval -> Approved:
+      name: Director Approve
+      requires_approval: true
+  - Director Approval -> Rejected: Director Reject
+  - Under Review -> Director Approval: Escalate
+  - Approved -> Paid Out: Pay Out
+  - Under Review -> Rejected: Reject
+  - New Claim -> Under Review: Submit Claim

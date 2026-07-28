@@ -1,0 +1,38 @@
+workflow: Bug Report
+prefix: BUG
+description: Defect lifecycle from discovery through to verified fix. Raised from failed test runs.
+
+states:
+  - name: New
+    sla_hours: 4
+    role: approver
+  - name: In Progress
+    sla_hours: 48
+    role: participant
+  - name: In Review
+    sla_hours: 24
+    role: approver
+  - name: Fixed
+    terminal: true
+    no_task: true
+  - name: Won't Fix
+    terminal: true
+    no_task: true
+  - name: Duplicate
+    terminal: true
+    no_task: true
+
+transitions:
+  - In Review -> Fixed:
+      name: Approve Fix
+      requires_approval: true
+      rules:
+        - {if: {field: severity, operator: eq, value: critical}, then: {type: assign_role, role: approver}, priority: 1}
+  - New -> In Progress: Assign
+  - New -> Duplicate: Mark Duplicate
+  - In Review -> In Progress: Reject Fix
+  - In Progress -> New: Reopen
+  - In Progress -> In Review: Submit Review
+  - New -> Won't Fix:
+      name: Won't Fix
+      requires_approval: true

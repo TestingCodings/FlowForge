@@ -1,0 +1,20 @@
+workflow: Employee Leave Request
+prefix: LVE
+description: Standard leave approval flow for HR
+
+states:
+  - name: Draft
+    sla_hours: 48
+    role: participant
+  - name: Manager Review
+    sla_hours: 24
+    role: approver
+  - name: Approved
+    terminal: true
+    no_task: true
+
+transitions:
+  - Manager Review -> Approved:
+      name: Approve
+      requires_approval: true
+  - Draft -> Manager Review: Submit

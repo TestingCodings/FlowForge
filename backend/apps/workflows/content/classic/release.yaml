@@ -1,0 +1,35 @@
+workflow: Release
+prefix: REL
+description: Software release gate. Blocks deployment if open critical bugs or failing test runs exist.
+
+states:
+  - name: Draft
+    sla_hours: 8
+    role: workflow_designer
+  - name: QA Sign-off
+    sla_hours: 4
+    role: approver
+  - name: Approved
+    sla_hours: 2
+    role: approver
+  - name: Deployed
+    terminal: true
+    no_task: true
+  - name: Rolled Back
+    terminal: true
+    no_task: true
+
+transitions:
+  - Approved -> Deployed:
+      name: Approve Deploy
+      requires_approval: true
+  - QA Sign-off -> Approved:
+      name: QA Approve
+      requires_approval: true
+      rules:
+        - {if: {field: open_critical_bugs, operator: gt, value: 0}, then: {type: block_transition, reason: Open critical bugs must be resolved before QA sign-off.}, priority: 1}
+        - {if: {field: failing_runs, operator: gt, value: 0}, then: {type: block_transition, reason: All test runs must be in Passed state before QA sign-off.}, priority: 2}
+  - QA Sign-off -> Draft: QA Reject
+  - Approved -> Draft: Reject Deploy
+  - Deployed -> Rolled Back: Roll Back
+  - Draft -> QA Sign-off: Submit for QA
