@@ -116,7 +116,7 @@ export default function DashboardPage() {
 
   const { data: workflows = [] } = useQuery({
     queryKey: ["workflows"],
-    queryFn: async () => (await apiClient.get("/workflows/")).data.results ?? [],
+    queryFn: async () => (await apiClient.get("/workflows/?page_size=200")).data.results ?? [],
   });
 
   const openTasks          = tasks.filter(t => t.status !== "completed").length;

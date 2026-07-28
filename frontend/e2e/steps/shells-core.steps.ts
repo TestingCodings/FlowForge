@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then, apiFetch } from "./fixtures";
+import { Given, When, Then, apiFetch, findWorkflowByName } from "./fixtures";
 
 /**
  * @core shell steps. These reconfigure a workflow's ui_schema, which is
@@ -23,10 +23,9 @@ import { Given, When, Then, apiFetch } from "./fixtures";
  */
 
 async function configureShell(page: any, workflowName: string, uiSchemaPatch: Record<string, unknown>) {
-  const wfs = await apiFetch(page, "GET", "/workflows/");
-  const list = (wfs.json as any).results ?? wfs.json;
-  const wf = list.find((w: any) => w.name === workflowName);
-  expect(wf, `workflow not found: ${workflowName}`).toBeTruthy();
+  // Paginated lookup: a page-1-only search silently misses seeded workflows
+  // once the database holds more than 25.
+  const wf = await findWorkflowByName(page, workflowName);
   const full = await apiFetch(page, "GET", `/workflows/${wf.id}/`);
   const resp = await apiFetch(page, "PATCH", `/workflows/${wf.id}/ui-schema/`, {
     ui_schema: { ...((full.json as any).ui_schema ?? {}), ...uiSchemaPatch },

@@ -128,7 +128,9 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
         "rest_framework.filters.SearchFilter",
     ),
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    # Custom class so `?page_size=` is honoured (capped) — the stock one
+    # ignores it, which silently truncated every caller that asked for more.
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.DefaultPagination",
     "PAGE_SIZE": 25,
     # Inbound trigger fire endpoint (unauthenticated, token-addressed) is
     # rate-limited per client IP.

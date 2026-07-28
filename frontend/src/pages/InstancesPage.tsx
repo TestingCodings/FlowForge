@@ -57,7 +57,7 @@ export default function InstancesPage() {
 
   const { data: workflows = [] } = useQuery<Workflow[]>({
     queryKey: ["workflows"],
-    queryFn: async () => (await apiClient.get("/workflows/")).data.results ?? [],
+    queryFn: async () => (await apiClient.get("/workflows/?page_size=200")).data.results ?? [],
   });
 
   const createMutation = useMutation({

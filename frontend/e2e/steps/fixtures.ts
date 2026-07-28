@@ -53,3 +53,62 @@ export async function apiFetch(page: Page, method: string, path: string, body?: 
     { method, path, body, apiBase: process.env.E2E_API_BASE ?? "http://localhost:8000/api" },
   );
 }
+
+/**
+ * Find a workflow by exact name, following pagination.
+ *
+ * Steps used to do `GET /workflows/` and search `results`, which is page 1
+ * only — the API paginates at 25. On any database with more workflows than
+ * that, seeded workflows became invisible and scenarios failed with
+ * "workflow not found" for something that plainly existed. It surfaced when
+ * a development database accumulated 29 definitions and pushed "Test Run"
+ * to index 27, but it is not a test-only problem: the demo company alone
+ * plans fifteen workflows on top of the seeded set.
+ *
+ * Paging is used rather than a `?search=` filter because the workflows
+ * endpoint declares no `search_fields`, so DRF's SearchFilter is inert
+ * there. If that changes, this can become one request.
+ */
+export async function findWorkflowByName(page: Page, name: string) {
+  let path: string | null = "/workflows/";
+  const seen: string[] = [];
+
+  while (path) {
+    const resp = await apiFetch(page, "GET", path);
+    const body = resp.json as any;
+    const results = (body?.results ?? body ?? []) as any[];
+    const match = results.find((w) => w.name === name);
+    if (match) return match;
+    seen.push(...results.map((w) => w.name));
+
+    // `next` is an absolute URL; apiFetch takes a path relative to the API base.
+    const next: string | null = body?.next ?? null;
+    path = next ? new URL(next).pathname.replace(/^\/api/, "") + new URL(next).search : null;
+  }
+
+  throw new Error(
+    `workflow not found: ${name} (searched ${seen.length} workflows across all pages)`,
+  );
+}
+
+/**
+ * Every workflow, across all pages.
+ *
+ * The stale-fixture sweeps used to read page 1 only, so once leftovers from
+ * crashed runs pushed past 25 they became permanently unsweepable and the
+ * database grew without bound — which is how the pagination bug above came
+ * to bite in the first place. A partial sweep is worse than none: it looks
+ * like it worked.
+ */
+export async function listAllWorkflows(page: Page): Promise<any[]> {
+  const all: any[] = [];
+  let path: string | null = "/workflows/";
+  while (path) {
+    const resp = await apiFetch(page, "GET", path);
+    const body = resp.json as any;
+    all.push(...((body?.results ?? body ?? []) as any[]));
+    const next: string | null = body?.next ?? null;
+    path = next ? new URL(next).pathname.replace(/^\/api/, "") + new URL(next).search : null;
+  }
+  return all;
+}

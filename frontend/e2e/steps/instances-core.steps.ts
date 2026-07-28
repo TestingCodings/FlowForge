@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then, apiFetch } from "./fixtures";
+import { Given, When, Then, apiFetch, listAllWorkflows } from "./fixtures";
 
 /**
  * @core instance lifecycle steps. Each scenario creates its own throwaway
@@ -10,8 +10,8 @@ import { Given, When, Then, apiFetch } from "./fixtures";
 const E2E_PREFIX = "E2E Core Flow";
 
 async function sweepStale(page: any) {
-  const wfs = await apiFetch(page, "GET", "/workflows/");
-  const list = (wfs.json as any).results ?? wfs.json;
+  // All pages: a page-1-only sweep leaves leftovers permanently unsweepable.
+  const list = await listAllWorkflows(page);
   for (const w of list) {
     if (typeof w.name === "string" && w.name.startsWith(E2E_PREFIX)) {
       await apiFetch(page, "DELETE", `/workflows/${w.id}/`); // may 400 if instances exist; best-effort

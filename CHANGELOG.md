@@ -43,6 +43,19 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   empty.
 
 ### Fixed
+- **`?page_size=` was silently ignored, and the dashboard's charts were
+  wrong because of it.** DRF's `PageNumberPagination` only honours the
+  parameter when `page_size_query_param` is configured, and it wasn't — so
+  the dashboard asked for 200 instances, received the default 25, and
+  charted those as though they were the whole set. Any caller asking for
+  more was quietly truncated rather than visibly so. Now served by
+  `config.pagination.DefaultPagination`, which honours `page_size` and caps
+  it at 200 so making it work doesn't hand a caller the whole table.
+- **Workflows past the first page were unreachable in the app.** The
+  workflows catalogue rendered page 1 with no pagination controls, so with
+  more than 25 definitions the rest simply weren't there — and the demo
+  company alone plans fifteen on top of the seeded set. The catalogue,
+  instances page and dashboard now request the full (capped) list.
 - **"View as YAML" produced text that could not be re-imported.** Two
   independent faults in `export_dsl`, both silent: it never emitted the `ui:`
   key (which `parse_dsl` has always read), so a round-trip dropped the shell,

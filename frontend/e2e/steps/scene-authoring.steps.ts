@@ -1,11 +1,11 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then, apiFetch } from "./fixtures";
+import { Given, When, Then, apiFetch, listAllWorkflows } from "./fixtures";
 
 const E2E_PREFIX = "E2E Scene Flow";
 
 async function sweepStale(page: any) {
-  const wfs = await apiFetch(page, "GET", "/workflows/");
-  const list = (wfs.json as any).results ?? wfs.json;
+  // All pages: a page-1-only sweep leaves leftovers permanently unsweepable.
+  const list = await listAllWorkflows(page);
   for (const wf of list) {
     if (typeof wf.name === "string" && wf.name.startsWith(E2E_PREFIX)) {
       await apiFetch(page, "DELETE", `/workflows/${wf.id}/`);

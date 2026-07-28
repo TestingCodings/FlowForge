@@ -14,7 +14,11 @@ export default function WorkflowsPage() {
 
   const { data = [], isLoading } = useQuery<Workflow[]>({
     queryKey: ["workflows"],
-    queryFn: async () => (await apiClient.get("/workflows/")).data.results ?? [],
+    // The catalogue must not hide workflows: the default page is 25 and
+    // this list has no pagination controls, so anything past it was simply
+    // unreachable. Definitions are bounded (tens, not thousands), so one
+    // capped request is the right shape.
+    queryFn: async () => (await apiClient.get("/workflows/?page_size=200")).data.results ?? [],
   });
 
   const importMutation = useMutation({
