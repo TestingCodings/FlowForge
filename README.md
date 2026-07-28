@@ -56,9 +56,9 @@ graph LR
     API --> PG
     API --> Blob
 
+    Engine -->|before and after hooks| Worker
     Engine --> RulesMS
     Engine --> Audit
-    Engine -->|before and after hooks| Worker
     Audit --> PG
 
     Worker -->|outbound, SSRF guarded| Ext
