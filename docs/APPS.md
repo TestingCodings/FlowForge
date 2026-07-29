@@ -77,11 +77,24 @@ schema hints) behind capability checks rather than showing them to everyone.
 **Ships alone as:** the creator/user UI split — the thing that currently makes
 demos feel rigid.
 
-### Phase 3 — The App bundle
-Extend the export format to `bundle_version: 2`, carrying identity + multiple
-workflows + roles + surfaces. `import_app` becomes the inverse.
+### Phase 3 — The App bundle — **partially done**
+`export_app` / `import_app` and `POST /api/workflows/export-app|import-app`
+carry **identity + many workflows** as `kind: "flowforge.app"`, versioned
+separately from the workflow bundle so the two formats evolve independently.
+Workflow bundles nest inside unchanged, so there is one importer rather than
+two that can drift, and existing v1 workflow bundles still import.
 
-**Ships alone as:** "here is your system as a file" — the consultancy deliverable.
+Import is atomic — a half-imported app (some workflows present, branding
+changed) is worse than a failed one — and `apply_identity=False` lets an
+install take a client's processes without adopting their branding.
+
+**Still to carry:** roles and surfaces, which depend on [ROLES.md](ROLES.md).
+Until roles are data there is nothing portable to put in the bundle.
+
+**Ships alone as:** "here is your system as a file" — the consultancy
+deliverable. Verified: the Northwind slice exports to a single 11.5 KB file
+carrying three workflows, their rules, forms and presentation, plus the
+workspace's name, tagline and theme.
 
 ### Phase 4 — Tenancy
 Add a `Tenant` FK to `Workspace`, `WorkflowDefinition`, `User`, and

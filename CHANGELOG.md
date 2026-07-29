@@ -83,6 +83,17 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   placeholders.
 
 ### Added
+- **App bundles — identity in the bundle** (docs/APPS.md Phase 3). A workflow
+  bundle carried one workflow and no branding, so a client could be handed
+  their processes but not their *system*. `export_app` / `import_app` and
+  `POST /api/workflows/export-app|import-app` bundle many workflows together
+  with the workspace's name, tagline, logo and theme as
+  `kind: "flowforge.app"`. Workflow bundles nest inside unchanged, so there's
+  one importer rather than two that can drift, and v1 workflow bundles
+  already in the wild still import. Import is atomic — a half-imported app is
+  worse than a failed one — and `apply_identity=False` lets an install take a
+  client's processes without adopting their branding. The Northwind slice
+  exports as a single 11.5 KB file.
 - **Creator/user UI split** (docs/ROLES.md §3) — the same workflow can now
   present a designer's page and an end user's page. `ui_schema.instance_view`
   gains `panels_by_role`, overriding `panels` for a given role; anything not

@@ -342,6 +342,67 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{safe_name}-v{wf.version}.flowforge.json"'
         return response
 
+    @action(detail=False, methods=["post"], url_path="export-app")
+    def export_app_bundle(self, request):
+        """Download several workflows plus the workspace identity as one file.
+
+        This is the shape a client is actually delivered: their processes and
+        their branding together, rather than a workflow at a time with the
+        branding left behind. workflow_designer+, since it exposes every named
+        workflow's full definition.
+
+        POST {"workflows": ["A", "B"], "include_identity": true}
+        """
+        from django.http import JsonResponse
+
+        from .portability import BundleError, export_app
+
+        require_min_role(request.user, "workflow_designer", action="export an app")
+        names = request.data.get("workflows")
+        if not isinstance(names, list) or not names:
+            return Response(
+                {"detail": "Provide a non-empty 'workflows' list of names."}, status=400
+            )
+        try:
+            bundle = export_app(
+                names, include_identity=bool(request.data.get("include_identity", True))
+            )
+        except BundleError as exc:
+            return Response({"detail": str(exc)}, status=400)
+
+        response = JsonResponse(bundle, json_dumps_params={"indent": 2})
+        label = (bundle.get("identity", {}).get("name") or "flowforge").lower()
+        safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in label)
+        response["Content-Disposition"] = f'attachment; filename="{safe}.flowforge-app.json"'
+        return response
+
+    @action(detail=False, methods=["post"], url_path="import-app")
+    def import_app_bundle(self, request):
+        """Recreate a whole app from a bundle. workflow_designer+.
+
+        POST the bundle, optionally {"bundle": ..., "apply_identity": false}
+        to import someone's processes without adopting their branding.
+        """
+        from .portability import BundleError, import_app
+
+        require_min_role(request.user, "workflow_designer", action="import an app")
+        wrapped = "bundle" in request.data
+        bundle = request.data.get("bundle") if wrapped else request.data
+        apply_identity = bool(request.data.get("apply_identity", True)) if wrapped else True
+        if not isinstance(bundle, dict):
+            return Response({"detail": "Request body must be a bundle object."}, status=400)
+        try:
+            created = import_app(bundle, created_by=request.user, apply_identity=apply_identity)
+        except BundleError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response(
+            {
+                "imported": len(created),
+                "workflows": WorkflowDefinitionSerializer(created, many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     @action(detail=False, methods=["post"], url_path="compose-yaml")
     def compose_yaml(self, request):
         """Create a workflow from DSL text (docs/BUILDER.md Part 3).

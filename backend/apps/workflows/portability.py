@@ -176,3 +176,88 @@ def import_workflow(bundle: dict, created_by=None, rename: str | None = None) ->
         )
 
     return workflow
+
+
+# ── App bundles (docs/APPS.md) ──────────────────────────────────────────────
+#
+# A workflow bundle carries one workflow and no branding, so a client could be
+# handed their processes but not their *system*. An app bundle adds identity
+# and many workflows, which is the unit a client actually buys — and the same
+# unit `manage.py load_app` builds from YAML.
+#
+# Versioned separately from BUNDLE_VERSION: the two formats evolve
+# independently, and conflating them would mean bumping one to change the
+# other. Workflow bundles nest inside unchanged, so there is one importer
+# rather than two implementations that can drift.
+
+APP_BUNDLE_VERSION = 1
+
+
+def export_app(workflow_names: list[str], include_identity: bool = True) -> dict:
+    """Bundle several workflows plus the workspace's identity into one file."""
+    workflows = []
+    for name in workflow_names:
+        wf = WorkflowDefinition.objects.filter(name=name).first()
+        if wf is None:
+            raise BundleError(f"Workflow not found: {name}")
+        workflows.append(export_workflow(wf))
+
+    bundle = {
+        "bundle_version": APP_BUNDLE_VERSION,
+        "kind": "flowforge.app",
+        "workflows": workflows,
+    }
+
+    if include_identity:
+        from apps.accounts.models import Workspace
+
+        ws = Workspace.current()
+        bundle["identity"] = {
+            "name": ws.name,
+            "tagline": ws.tagline,
+            "logo_url": ws.logo_url,
+            "ui_config": ws.ui_config or {},
+        }
+
+    return bundle
+
+
+def import_app(bundle: dict, created_by=None, apply_identity: bool = True) -> list:
+    """Recreate every workflow in an app bundle, optionally applying identity.
+
+    Atomic: a half-imported app — some workflows present, some not, branding
+    changed — is worse than a failed one, because there's no obvious way back.
+
+    `apply_identity=False` matters when importing a client's processes into an
+    install that already has its own branding; the caller shouldn't have to
+    strip the file by hand to avoid being rebranded.
+    """
+    if bundle.get("kind") != "flowforge.app":
+        raise BundleError(
+            f"Not a FlowForge app bundle (kind={bundle.get('kind')!r}). "
+            "A single-workflow bundle imports through import_workflow."
+        )
+    if bundle.get("bundle_version") != APP_BUNDLE_VERSION:
+        raise BundleError(
+            f"Unsupported app bundle_version: {bundle.get('bundle_version')}"
+        )
+
+    created = []
+    with transaction.atomic():
+        for inner in bundle.get("workflows", []):
+            created.append(import_workflow(inner, created_by=created_by))
+
+        identity = bundle.get("identity")
+        if identity and apply_identity:
+            from apps.accounts.models import Workspace
+
+            ws = Workspace.current()
+            ws.name = identity.get("name", ws.name)
+            ws.tagline = identity.get("tagline", ws.tagline)
+            ws.logo_url = identity.get("logo_url", ws.logo_url)
+            if identity.get("ui_config"):
+                # Merge, so settings the bundle doesn't express survive.
+                ws.ui_config = {**(ws.ui_config or {}), **identity["ui_config"]}
+            ws.save()
+
+    return created
