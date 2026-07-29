@@ -1,7 +1,8 @@
 # Custom Exportable Apps — Design
 
-**Status:** design. Nothing here is built. It supersedes the older framing in
-which "workflow packages" and "multi-tenancy" were alternatives.
+**Status:** Phase 3 partially built (identity + multi-workflow bundles);
+Phases 1, 2 and 4 are design only. Supersedes the older framing in which
+"workflow packages" and "multi-tenancy" were alternatives.
 
 ---
 
@@ -30,7 +31,8 @@ App
 └── seed          optional starting data / demo content     (today: seed command)
 ```
 
-Two of those five exist. The strategy is to make the other three portable, at
+Three of those five are portable today (identity, workflows, and seed content
+via `load_app`). The strategy is to make roles and surfaces portable too, at
 which point one mechanism serves both models:
 
 - **Consultancy delivery** — export the App, deploy it for one client.
@@ -46,7 +48,8 @@ boundary once, and which model you sell is a deployment decision.
 
 | Piece | State | Gap |
 |---|---|---|
-| Workflow export/import | `portability.py`, `bundle_version: 1` | Carries one workflow. No identity, roles, or surfaces |
+| Workflow export/import | `portability.py`, `bundle_version: 1` | Carries one workflow |
+| **App export/import** | `export_app`/`import_app`, `kind: flowforge.app` | **Carries identity + many workflows.** No roles or surfaces yet |
 | Branding | `Workspace` model | **Singleton** — `Workspace.current()`, one row |
 | Roles | `RoleName` TextChoices | **Fixed five-value enum**, compiled in |
 | Permissions | `require_role`, `userCan` | Checks against that enum |
