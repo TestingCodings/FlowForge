@@ -70,9 +70,69 @@ instances:
       severity: Medium
     advance: [Open Investigation]
 
+  - workflow: Leave Request
+    ref: annual-leave-approved
+    creator: bob@flowforge.dev
+    metadata:
+      employee_name: Ben Howard
+      leave_type: Annual Leave
+      start_date: "2026-08-11"
+      end_date: "2026-08-15"
+      line_manager_confirmed: true
+    advance: [Submit Leave Request, Manager Endorse, Approve Leave]
+
+  - workflow: Leave Request
+    ref: leave-declined
+    creator: bob@flowforge.dev
+    metadata:
+      employee_name: Priya Shah
+      leave_type: Compassionate Leave
+      start_date: "2026-08-01"
+      end_date: "2026-08-03"
+      line_manager_confirmed: true
+    advance: [Submit Leave Request, Decline at Manager Review]
+
+  - workflow: New Starter Onboarding
+    ref: new-starter-salim
+    creator: admin@flowforge.dev
+    metadata:
+      employee_name: Salim Khan
+      job_title: Facilities Coordinator
+      start_date: "2026-08-04"
+      laptop_issued: true
+      account_created: true
+    advance: [Start Provisioning, Mark Provisioning Complete]
+
+  - workflow: Training & Certification
+    ref: salim-manual-handling
+    creator: admin@flowforge.dev
+    parent: new-starter-salim
+    metadata:
+      employee_name: Salim Khan
+      certificate_name: Manual Handling
+    advance: [Flag as Expiring]
+
+  - workflow: Security Awareness Module
+    ref: salim-security-pass
+    creator: admin@flowforge.dev
+    parent: new-starter-salim
+    metadata:
+      trainee_name: Salim Khan
+    advance: [Inspect the sender address, Return to the inbox, Report it to Security]
+
+  - workflow: Security Awareness Module
+    ref: security-retake-example
+    creator: bob@flowforge.dev
+    metadata:
+      trainee_name: Robin Okafor
+    advance: [Open the link immediately]
+
 # Cross-workflow links. These are what make the topology view show one
 # company rather than three unrelated demos.
 relationships:
   - from: water-ingress
     to: in-progress-job
     type: arose_from
+  - from: annual-leave-approved
+    to: new-starter-salim
+    type: backfills_for

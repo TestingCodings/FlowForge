@@ -1,0 +1,32 @@
+# People workflow: auditable certification records with visible age/expiry risk.
+workflow: Training & Certification
+prefix: TRN
+description: Employee training certificates with expiry tracking
+
+states:
+  - name: Valid
+    role: participant
+    sla_hours: 7200
+  - name: Expiring Soon
+    role: participant
+    sla_hours: 336
+  - name: Expired
+    terminal: true
+  - name: Renewed
+    terminal: true
+
+transitions:
+  - Valid -> Expiring Soon: Flag as Expiring
+  - Expiring Soon -> Renewed: Record Renewal
+  - Expiring Soon -> Expired: Mark Expired
+  - Valid -> Expired: Mark Expired Immediately
+
+ui:
+  shell: table
+  title_field: certificate_name
+  list_columns: [reference, state, metadata.employee_name, computed.age_days_in_state, sla]
+  computed:
+    age_days_in_state:
+      expr: age_days
+  instance_view:
+    panels: [state_graph, timeline]

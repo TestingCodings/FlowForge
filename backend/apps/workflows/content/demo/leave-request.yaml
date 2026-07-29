@@ -1,0 +1,49 @@
+# People workflow: approval flow with explicit hierarchy checks.
+workflow: Leave Request
+prefix: LVE
+description: Annual and ad-hoc leave requests with manager and People approval
+
+states:
+  - name: Draft
+    role: participant
+  - name: Manager Review
+    role: approver
+    sla_hours: 24
+    form:
+      name: Manager Review Notes
+      required_to_transition: false
+      fields:
+        - {name: manager_notes, type: textarea, label: Notes for People team, required: false}
+  - name: People Review
+    role: approver
+    sla_hours: 24
+  - name: Approved
+    terminal: true
+  - name: Declined
+    terminal: true
+
+transitions:
+  - Draft -> Manager Review: Submit Leave Request
+  - Manager Review -> People Review:
+      name: Manager Endorse
+      requires_approval: true
+      rules:
+        - if: {field: line_manager_confirmed, op: is_false}
+          then:
+            block_transition: true
+            reason: The reporting-line manager must confirm this request before People review.
+  - People Review -> Approved:
+      name: Approve Leave
+      requires_approval: true
+  - Manager Review -> Declined: Decline at Manager Review
+  - People Review -> Declined: Decline at People Review
+
+ui:
+  shell: list
+  title_field: employee_name
+  card_fields: [leave_type, start_date, end_date]
+  computed:
+    days_open:
+      expr: age_days
+  instance_view:
+    panels: [state_graph, forms, timeline]

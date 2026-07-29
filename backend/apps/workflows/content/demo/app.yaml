@@ -22,5 +22,9 @@ workflows:
   - asset-register.yaml
   - maintenance-request.yaml
   - incident-report.yaml
+  - leave-request.yaml
+  - training-record.yaml
+  - security-awareness.yaml
+  - onboarding.yaml
 
 instances: instances.yaml
