@@ -1,2 +1,9 @@
-mcp>=1.0.0
-httpx>=0.27.0
+# Pinned, matching backend/ and rules-service/. These were `>=` ranges, which
+# meant CI silently installed mcp 2.0.0 the day it was published — a major
+# release that moved `mcp.server.fastmcp`, so the import in server.py stopped
+# resolving. Nothing in this repo changed; the world did.
+#
+# Upgrading to mcp 2.x is a real task (the FastMCP entry point moved), not a
+# version bump. Pinned to the 1.x line the code targets until that is done.
+mcp==1.28.1
+httpx==0.27.0

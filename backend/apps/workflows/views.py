@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -43,7 +44,26 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         require_min_role(request.user, "workflow_designer", action="delete a workflow definition")
-        return super().destroy(request, *args, **kwargs)
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError as exc:
+            # States and instances PROTECT their definition, so deleting a
+            # workflow that is in use is a foreseeable refusal — it was
+            # surfacing as an unhandled 500 with a stack trace. 409 says
+            # "the current state of the resource forbids this", which is
+            # exactly the situation, and names what is holding it.
+            # verbose_name_plural is a lazy translation proxy; join needs str.
+            blockers = {str(type(obj)._meta.verbose_name_plural) for obj in exc.protected_objects}
+            return Response(
+                {
+                    "detail": (
+                        "This workflow is in use and cannot be deleted. "
+                        f"It still has: {', '.join(sorted(blockers))}. "
+                        "Deactivate it instead, or remove what references it."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
     @action(detail=True, methods=["post"], url_path="publish-new-version")
     def publish_new_version(self, request, pk=None):

@@ -43,6 +43,16 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   empty.
 
 ### Fixed
+- **Deleting a workflow in use returned HTTP 500.** `destroy` called straight
+  through to Django, so the `ProtectedError` raised by a workflow that still
+  has instances surfaced as an unhandled exception with a stack trace — on an
+  action any designer might attempt. It now answers 409 naming what holds it
+  ("It still has: workflow instances") and suggesting deactivation instead.
+- **The MCP server was pinned by nothing.** `mcp>=1.0.0` let CI install
+  mcp 2.0.0 the day it shipped, which moved `mcp.server.fastmcp` and broke
+  the import. Nothing in the repo changed; the world did. Now pinned to the
+  1.x line the code targets, matching how `backend/` and `rules-service/`
+  already pin. Upgrading to 2.x is a real task, not a version bump.
 - **The E2E suite is reliable under parallel workers again.** Shell scenarios
   reconfigured *seeded* workflows' `ui_schema` — shared mutable state — so two
   Playwright workers could rewrite each other's setup mid-run and a different

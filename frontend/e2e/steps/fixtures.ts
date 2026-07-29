@@ -145,14 +145,29 @@ export interface WorkflowFixtureSpec {
 
 export const FIXTURE_PREFIX = "E2E Fixture";
 
-/** Remove workflows left behind by crashed runs, across all pages. */
+/**
+ * Remove fixture workflows left behind by earlier runs, where possible.
+ *
+ * Deliberately best-effort. Instances cannot be deleted through the API at
+ * all — `DELETE /instances/<id>/` answers 405 "complete them instead",
+ * because an immutable audit trail is the point — and a workflow with
+ * instances is PROTECTed, so any fixture that created one is permanently
+ * undeletable. Fixture workflows without instances are cleaned up; the rest
+ * accumulate.
+ *
+ * That is acceptable rather than ideal, and it is safe for two reasons:
+ * every fixture name is unique, so leftovers cannot influence a run; and CI
+ * starts from an empty database each time. It matters only on a long-lived
+ * development database, where `manage.py seed --reset --testrail` clears the
+ * decks. Accumulation used to break the suite by pushing seeded workflows
+ * off page one — that is fixed properly now, in the pagination, rather than
+ * relying on cleanup.
+ */
 export async function sweepFixtures(page: Page) {
   for (const wf of await listAllWorkflows(page)) {
-    if (typeof wf.name === "string" && wf.name.startsWith(FIXTURE_PREFIX)) {
-      // Best-effort: may 400 while instances exist, and that's acceptable —
-      // the next run's unique name means a leftover can't affect it.
-      await apiFetch(page, "DELETE", `/workflows/${wf.id}/`);
-    }
+    if (typeof wf.name !== "string" || !wf.name.startsWith(FIXTURE_PREFIX)) continue;
+    // 409 when instances hold it; nothing to do about that from here.
+    await apiFetch(page, "DELETE", `/workflows/${wf.id}/`);
   }
 }
 

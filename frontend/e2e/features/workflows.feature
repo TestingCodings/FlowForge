@@ -19,7 +19,11 @@ Feature: Workflow catalogue
     When I open the "Bug Report" workflow
     Then I see the workflow's state diagram
     And I see the "Edit in Builder" action
-    And I see the "Open kanban view" action
+    # "Open <shell> view" — Bug Report is seeded with no ui_schema, so it is
+    # the default list shell. This said "kanban", which only ever passed
+    # because a shell scenario had mutated Bug Report first; once those
+    # scenarios got their own fixtures the borrowed state disappeared.
+    And I see the "Open list view" action
 
   @core
   Scenario: Exporting a workflow as a portable bundle
