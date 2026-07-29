@@ -103,6 +103,18 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   placeholders.
 
 ### Added
+- **Roles as data — step 1** (docs/ROLES.md). `Role` gains `key`, `label`,
+  `capabilities`, `is_system` and `rank`, with a closed `CAPABILITIES`
+  vocabulary. Role *names* become free text so a client can have a "Site
+  Manager"; capabilities stay fixed because each maps to a real check, so a
+  custom role can never invent a permission nothing enforces.
+
+  Deliberately inert — nothing reads the new fields yet, and `name` is kept
+  equal to `key` because every permission check still compares against
+  `name`. The full suite passes unchanged (454), which is the evidence this
+  step was for: a permissions change is the one class where "mostly working"
+  is dangerous, so the shape lands and is proven harmless before anything
+  starts depending on it.
 - **App bundles — identity in the bundle** (docs/APPS.md Phase 3). A workflow
   bundle carried one workflow and no branding, so a client could be handed
   their processes but not their *system*. `export_app` / `import_app` and

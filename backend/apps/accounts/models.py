@@ -57,16 +57,116 @@ class RoleName(models.TextChoices):
     VIEWER = "viewer", "Viewer"
 
 
+# The closed vocabulary of things a role may be permitted to do
+# (docs/ROLES.md §2.1). Role *names* become free text so a client can have a
+# "Site Manager"; capabilities stay fixed because each one corresponds to a
+# real check in the code. Inverting it this way is what makes custom roles
+# safe: a creator composes from these, and can never invent a permission
+# nothing enforces.
+CAPABILITIES = (
+    "workflow.view", "workflow.design", "workflow.publish",
+    "instance.view", "instance.create", "instance.transition",
+    "instance.approve", "instance.comment", "instance.metadata",
+    "form.submit", "media.upload", "media.delete",
+    "user.view", "user.create", "user.assign_roles",
+    "secret.manage", "hook.manage", "audit.view",
+    "workspace.manage",
+)
+
+# What each built-in role may do, mirroring the checks that exist today so
+# this step changes no behaviour. `rank` supports the "this role or above"
+# comparisons already scattered through the code (viewer+, designer+); it is
+# a convenience over capabilities, never a parallel source of authority.
+SYSTEM_ROLES = {
+    "platform_admin": {
+        "label": "Platform Admin", "rank": 50, "capabilities": list(CAPABILITIES),
+    },
+    "workflow_designer": {
+        "label": "Workflow Designer", "rank": 40,
+        "capabilities": [
+            "workflow.view", "workflow.design", "workflow.publish",
+            "instance.view", "instance.create", "instance.transition",
+            "instance.approve", "instance.comment", "instance.metadata",
+            "form.submit", "media.upload", "media.delete",
+            "user.view", "secret.manage", "hook.manage", "audit.view",
+        ],
+    },
+    "approver": {
+        "label": "Approver", "rank": 30,
+        "capabilities": [
+            "workflow.view", "instance.view", "instance.create",
+            "instance.transition", "instance.approve", "instance.comment",
+            "instance.metadata", "form.submit", "media.upload", "user.view",
+        ],
+    },
+    "participant": {
+        "label": "Participant", "rank": 20,
+        "capabilities": [
+            "workflow.view", "instance.view", "instance.create",
+            "instance.transition", "instance.comment", "instance.metadata",
+            "form.submit", "media.upload", "user.view",
+        ],
+    },
+    "viewer": {
+        "label": "Viewer", "rank": 10,
+        "capabilities": ["workflow.view", "instance.view", "instance.comment", "user.view"],
+    },
+}
+
+
 class Role(models.Model):
+    """A role, as data rather than an enum (docs/ROLES.md).
+
+    `name` is retained and kept equal to `key` because every permission check
+    still reads it. Migrating those is the next step; until then the two must
+    not diverge or a check silently stops matching.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=50, choices=RoleName.choices, unique=True)
+    # Legacy: still the field permission checks compare against.
+    name = models.CharField(max_length=50, unique=True)
+    # Stable identifier a bundle can reference across installs.
+    key = models.SlugField(max_length=50, unique=True)
+    label = models.CharField(max_length=100, blank=True)
+    capabilities = models.JSONField(default=list, blank=True)
+    # Built-in roles cannot be deleted; a client's own roles can.
+    is_system = models.BooleanField(default=False)
+    rank = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
 
     class Meta:
         db_table = "accounts_role"
 
     def __str__(self):
-        return self.get_name_display()
+        return self.label or self.key
+
+    def save(self, *args, **kwargs):
+        """Fill the new fields from `name` when they weren't supplied.
+
+        Every existing caller does `Role.objects.create(name=RoleName.X)` and
+        knows nothing about keys or capabilities. Defaulting here keeps all of
+        them working and, more importantly, keeps them *correct* — a role
+        created the old way still gets the right capabilities, so this step
+        cannot quietly produce roles that are permitted nothing.
+        """
+        if not self.key:
+            self.key = self.name
+        spec = SYSTEM_ROLES.get(self.key)
+        if spec:
+            if not self.label:
+                self.label = spec["label"]
+            if not self.capabilities:
+                self.capabilities = list(spec["capabilities"])
+            if not self.rank:
+                self.rank = spec["rank"]
+            # Built-ins are marked as such so they can't be deleted later.
+            self.is_system = True
+        elif not self.label:
+            self.label = self.key.replace("_", " ").title()
+        super().save(*args, **kwargs)
+
+    def has(self, capability: str) -> bool:
+        return capability in (self.capabilities or [])
 
 
 class UserRole(models.Model):
