@@ -48,16 +48,14 @@ export E2E_TAGS="@smoke or (@core and not @wip)" E2E_BASE_URL=http://localhost:5
 npx bddgen && npx playwright test --project=chromium
 ```
 
-**Run E2E with `--workers=1`.** The shell scenarios mutate shared seeded
-workflows' `ui_schema`, so parallel workers race and a different scenario
-fails each run. Serially it is reliable. The real fix is per-scenario
-fixtures; until then, a failure under parallel workers is not evidence of a
-regression.
+Parallel workers are fine — scenarios own their data. The shell scenarios
+used to reconfigure *seeded* workflows, which made runs race; they now build
+throwaway workflows via `createWorkflowFixture` in `e2e/steps/fixtures.ts`.
+**If you add a scenario, build a fixture rather than mutating seeded data**,
+or the flakiness comes straight back.
 
-**E2E depends on seeded data.** Run `manage.py seed --reset --testrail`
-first. Do not generate demo content by exporting a working database — the
-suite rewrites `ui_schema` on several seeded workflows, and those mutations
-get captured as if they were the seed's own output.
+**Some scenarios still read seeded data** (the workflows catalogue and
+topology views), so run `manage.py seed --reset --testrail` first.
 
 ## Demo content
 

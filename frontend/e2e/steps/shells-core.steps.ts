@@ -1,58 +1,82 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then, apiFetch, findWorkflowByName } from "./fixtures";
+import { Given, When, Then, apiFetch, createWorkflowFixture, sweepFixtures } from "./fixtures";
 
 /**
- * @core shell steps. These reconfigure a workflow's ui_schema, which is
- * shared mutable state, so each scenario must own a workflow no other spec
- * reads:
+ * @core shell steps.
  *
- *   table  → Employee Leave Request
- *   matrix → Test Run
- *   list   → Release
+ * Each scenario builds its **own** workflow. These used to reconfigure seeded
+ * workflows' ui_schema, which is shared mutable state: two Playwright workers
+ * could rewrite each other's setup mid-run, so a different scenario failed
+ * each time and the suite was only trustworthy at --workers=1. It also
+ * coupled these tests to unrelated features — workflows.feature opens Bug
+ * Report expecting a kanban action, which broke when a shell scenario
+ * repointed it.
  *
- * Two rules, both learned the hard way:
- *
- * 1. Every workflow named here must exist in `manage.py seed --testrail`,
- *    which is what CI runs. This once pointed at a workflow called "Test"
- *    that the seed has never created — it passed only on a developer machine
- *    that happened to have one by hand, so the suite could never go green on
- *    a clean database.
- * 2. Don't pick a workflow another feature asserts against. "Bug Report"
- *    looks free but workflows.feature opens it and expects an "Open kanban
- *    view" action, which changing the shell here would break.
+ * Owning the data also means the assertions can be exact rather than
+ * defensive, because the fixture decides how many states and instances exist.
  */
 
-async function configureShell(page: any, workflowName: string, uiSchemaPatch: Record<string, unknown>) {
-  // Paginated lookup: a page-1-only search silently misses seeded workflows
-  // once the database holds more than 25.
-  const wf = await findWorkflowByName(page, workflowName);
-  const full = await apiFetch(page, "GET", `/workflows/${wf.id}/`);
-  const resp = await apiFetch(page, "PATCH", `/workflows/${wf.id}/ui-schema/`, {
-    ui_schema: { ...((full.json as any).ui_schema ?? {}), ...uiSchemaPatch },
-  });
-  expect(resp.status, `ui-schema patch failed: ${JSON.stringify(resp.json)}`).toBe(200);
-  (page as any)._shellWorkflowId = wf.id; // consumed by the shared "I open its view"
-  return wf.id;
+/** Three states, two transitions — enough for every shell under test. */
+function baseSpec(label: string, prefix: string) {
+  return {
+    label,
+    prefix,
+    states: [
+      { name: "Open" },
+      { name: "Doing" },
+      { name: "Done", terminal: true },
+    ],
+    transitions: [
+      { name: "Start", from: "Open", to: "Doing" },
+      { name: "Finish", from: "Doing", to: "Done" },
+    ],
+  };
+}
+
+async function build(page: any, spec: any) {
+  await sweepFixtures(page);
+  const wf = await createWorkflowFixture(page, spec);
+  page._shellWorkflowId = wf.id;   // consumed by the shared "I open its view"
+  page._shellWorkflow = wf;
+  return wf;
 }
 
 Given(
   "a workflow configured with the {string} shell and columns {string}",
   async ({ page }, shell: string, columns: string) => {
-    await configureShell(page, "Employee Leave Request", {
-      shell, list_columns: columns.split(",").map((c) => c.trim()),
+    await build(page, {
+      ...baseSpec("Table", "TBL"),
+      uiSchema: { shell, list_columns: columns.split(",").map((c) => c.trim()) },
+      instances: [
+        { metadata: { title: "First" } },
+        { metadata: { title: "Second" }, advance: ["Start"] },
+      ],
     });
   },
 );
 
 Given("a workflow configured with the {string} shell", async ({ page }, shell: string) => {
-  await configureShell(page, "Release", { shell });
+  await build(page, {
+    ...baseSpec("List", "LST"),
+    uiSchema: { shell },
+    instances: [{ metadata: { title: "One" } }, { metadata: { title: "Two" } }],
+  });
 });
 
 Given(
   "the {string} workflow uses the {string} shell grouped by suite and state",
-  async ({ page }, name: string, shell: string) => {
-    await configureShell(page, name, {
-      shell, matrix: { rows: "metadata.suite", columns: "current_state" },
+  async ({ page }, _name: string, shell: string) => {
+    // Two suites × two occupied states, so "a row per suite" and "a column
+    // per state" are both satisfied by construction rather than by luck.
+    await build(page, {
+      ...baseSpec("Matrix", "MTX"),
+      uiSchema: { shell, matrix: { rows: "metadata.suite", columns: "current_state" } },
+      instances: [
+        { metadata: { suite: "Authentication" } },
+        { metadata: { suite: "Authentication" }, advance: ["Start"] },
+        { metadata: { suite: "Checkout" } },
+        { metadata: { suite: "Checkout" }, advance: ["Start"] },
+      ],
     });
   },
 );
@@ -64,29 +88,15 @@ Then("the table header shows {string}, {string} and {string}", async ({ page }, 
 });
 
 Then("I see a row per suite", async ({ page }) => {
-  // Matrix rows are keyed by the suite metadata; the seeded Test Runs have
-  // several distinct suites.
   const rows = page.locator("table tbody tr");
-  await expect(rows.first()).toBeVisible();
-  expect(await rows.count()).toBeGreaterThan(1);
+  await expect(rows).toHaveCount(2);   // exactly the two suites the fixture made
 });
 
 Then("I see a column per state", async ({ page }) => {
-  // The matrix only renders columns for states that instances actually
-  // occupy, not every state the workflow defines — so a fixed number was
-  // never satisfiable (Test Run defines 5 states but its seeded instances
-  // sit in 3). Derive the expectation from the data instead.
-  // Filter by the id the Given step stashed — the API filters on
-  // workflow_definition by id only, so a name filter would be ignored and
-  // silently return every instance in the system.
-  const wfId = (page as any)._shellWorkflowId;
-  const insts = await apiFetch(page, "GET", `/instances/?workflow_definition=${wfId}`);
-  const rows = ((insts.json as any).results ?? insts.json) as any[];
-  const occupied = new Set(rows.map((i) => i.current_state_name)).size;
-  const headers = page.locator("table thead th");
-  await expect(headers.first()).toBeVisible();
-  // One label column for the row axis, plus one per occupied state.
-  expect(await headers.count()).toBe(occupied + 1);
+  // The matrix renders a column only for states instances actually occupy.
+  // The fixture puts instances in exactly two ("Open" and "Doing"), plus the
+  // row-label column.
+  await expect(page.locator("table thead th")).toHaveCount(3);
 });
 
 Then("cells show state-coloured instance chips", async ({ page }) => {
@@ -94,17 +104,15 @@ Then("cells show state-coloured instance chips", async ({ page }) => {
 });
 
 When("I filter the list by a reference substring", async ({ page }) => {
-  // Must match the workflow the list-shell scenario configures above.
-  await page.getByPlaceholder(/filter by reference/i).fill("REL");
+  await page.getByPlaceholder(/filter by reference/i).fill("LST");
 });
 
 Then("only matching instances remain", async ({ page }) => {
   const rows = page.locator(".card > div[style*='cursor']");
   await expect(rows.first()).toBeVisible();
   for (const text of await rows.allTextContents()) {
-    expect(text).toMatch(/REL/);
+    expect(text).toMatch(/LST/);
   }
-  // And a non-matching filter empties the list with the no-match message.
   await page.getByPlaceholder(/filter by reference/i).fill("zzz-no-match");
   await expect(page.getByText(/no instances match/i)).toBeVisible();
 });

@@ -43,6 +43,16 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   empty.
 
 ### Fixed
+- **The E2E suite is reliable under parallel workers again.** Shell scenarios
+  reconfigured *seeded* workflows' `ui_schema` — shared mutable state — so two
+  Playwright workers could rewrite each other's setup mid-run and a different
+  scenario failed each time. It also coupled the shell tests to unrelated
+  features: `workflows.feature` opens "Bug Report" expecting a kanban action,
+  which broke whenever a shell scenario repointed it. Each scenario now builds
+  its own workflow (`createWorkflowFixture`), which also lets the assertions
+  be exact — "a row per suite" checks for exactly two rows rather than "more
+  than one" — because the fixture decides what exists. Three consecutive clean
+  runs at full parallelism.
 - **`?page_size=` was silently ignored, and the dashboard's charts were
   wrong because of it.** DRF's `PageNumberPagination` only honours the
   parameter when `page_size_query_param` is configured, and it wasn't — so

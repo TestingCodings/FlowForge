@@ -1,33 +1,30 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then } from "./fixtures";
+import { Given, When, Then, createWorkflowFixture, sweepFixtures } from "./fixtures";
 
-const API = process.env.E2E_API_BASE ?? "http://localhost:8000/api";
-
-/** Set a workflow's shell via the API, using the token the UI stored at login. */
-async function setShell(page: any, workflowName: string, shell: string): Promise<string> {
-  return page.evaluate(
-    async ({ api, name, shell }: { api: string; name: string; shell: string }) => {
-      const token = localStorage.getItem("ff_access_token");
-      const hdrs = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-      // page_size: the default page is 25, so a bare list hides seeded
-      // workflows on any database with more than that.
-      const wfs = await (await fetch(`${api}/workflows/?page_size=200`, { headers: hdrs })).json();
-      const list = wfs.results ?? wfs;
-      const wf = list.find((w: any) => w.name === name);
-      if (!wf) throw new Error(`Workflow not found: ${name}`);
-      await fetch(`${api}/workflows/${wf.id}/ui-schema/`, {
-        method: "PATCH", headers: hdrs,
-        body: JSON.stringify({ ui_schema: { ...wf.ui_schema, shell } }),
-      });
-      return wf.id as string;
-    },
-    { api: API, name: workflowName, shell },
-  );
-}
-
-Given("the {string} workflow uses the {string} shell", async ({ page }, name: string, shell: string) => {
-  const id = await setShell(page, name, shell);
-  (page as any)._shellWorkflowId = id;
+/**
+ * Shell scenarios build their own workflow rather than repointing a seeded
+ * one. Mutating shared workflows made the suite unreliable under parallel
+ * workers and coupled it to unrelated features — workflows.feature opens
+ * "Bug Report" expecting a kanban action, which broke whenever a shell
+ * scenario changed that workflow's shell.
+ */
+Given("the {string} workflow uses the {string} shell", async ({ page }, label: string, shell: string) => {
+  await sweepFixtures(page);
+  const wf = await createWorkflowFixture(page, {
+    label: label.replace(/[^A-Za-z]/g, "") || "Shell",
+    prefix: "SHL",
+    states: [{ name: "Open" }, { name: "Doing" }, { name: "Done", terminal: true }],
+    transitions: [
+      { name: "Start", from: "Open", to: "Doing" },
+      { name: "Finish", from: "Doing", to: "Done" },
+    ],
+    uiSchema: { shell },
+    instances: [
+      { metadata: { title: "First" } },
+      { metadata: { title: "Second" }, advance: ["Start"] },
+    ],
+  });
+  (page as any)._shellWorkflowId = wf.id;
 });
 
 When("I open its view", async ({ page }) => {
