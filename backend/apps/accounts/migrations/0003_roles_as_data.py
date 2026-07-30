@@ -55,10 +55,17 @@ class Migration(migrations.Migration):
 
     operations = [
         # 1. Add the new columns, `key` nullable so existing rows survive.
+        #
+        # db_index=False matters on Postgres: SlugField indexes by default, and
+        # an indexed varchar also gets a companion `..._like` index. Step 3
+        # then alters the column to unique, which recreates that companion —
+        # and the original is still there, so the migration dies with
+        # 'relation "accounts_role_key_..._like" already exists'. SQLite has no
+        # such index, so this only ever failed on CI.
         migrations.AddField(
             model_name="role",
             name="key",
-            field=models.SlugField(max_length=50, null=True),
+            field=models.SlugField(max_length=50, null=True, db_index=False),
         ),
         migrations.AddField(
             model_name="role",
