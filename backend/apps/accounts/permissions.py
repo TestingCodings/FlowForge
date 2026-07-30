@@ -74,6 +74,62 @@ def require_min_role(user, minimum: str, action: str = "perform this action") ->
         )
 
 
+# ── Capability checks (docs/ROLES.md §2.3) ─────────────────────────────────
+#
+# Introduced *alongside* the role checks above, which remain authoritative.
+# Nothing calls these to gate a request yet: step 2 is about proving the two
+# mechanisms agree for every role and capability, so that step 3 can flip
+# them without changing who is permitted what. A permissions migration is the
+# one place where a silent disagreement is unacceptable, so it gets a shadow
+# period rather than a cutover.
+#
+# Once roles are fully data-driven these replace has_min_role entirely, and
+# the ROLE_HIERARCHY list above goes with them.
+
+
+def capabilities_for(user) -> set:
+    """Every capability the user holds, unioned across their roles.
+
+    Cached on the user object for the life of the request, like
+    get_user_roles: this is consulted on every permission check, and a
+    per-check query would put the database in the hot path of every view.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return set()
+    if not hasattr(user, "_ff_capabilities"):
+        caps: set = set()
+        for role_caps in user.user_roles.select_related("role").values_list(
+            "role__capabilities", flat=True
+        ):
+            caps |= set(role_caps or [])
+        user._ff_capabilities = caps
+    return user._ff_capabilities
+
+
+def has_capability(user, capability: str) -> bool:
+    """True if the user holds `capability`.
+
+    An unrecognised capability is always False. Failing closed matters: a
+    typo at a call site should deny everyone loudly, not grant everyone
+    silently.
+    """
+    from apps.accounts.models import CAPABILITIES
+
+    if capability not in CAPABILITIES:
+        return False
+    return capability in capabilities_for(user)
+
+
+def require_capability(user, capability: str, action: str = "perform this action") -> None:
+    """Raise 403 unless the user holds `capability`."""
+    if not has_capability(user, capability):
+        held = ", ".join(sorted(get_user_roles(user))) or "none"
+        raise PermissionDenied(
+            f"You need the '{capability}' capability to {action}. "
+            f"Your current roles: {held}."
+        )
+
+
 # ── DRF Permission classes ─────────────────────────────────────────────────
 
 class IsViewer(BasePermission):

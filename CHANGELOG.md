@@ -103,6 +103,16 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   placeholders.
 
 ### Added
+- **Roles as data — step 2** (docs/ROLES.md §2.3) — `capabilities_for`,
+  `has_capability` and `require_capability`, added *alongside* the role
+  checks rather than replacing them. Nothing gates a request through them
+  yet; this step exists to prove the two mechanisms agree before anything
+  depends on the new one. A 25-cell matrix (five roles × five
+  min-role↔capability pairs) asserts they return the same answer everywhere,
+  so the eventual flip cannot change who is permitted what. Unknown
+  capabilities fail closed — a typo denies loudly instead of granting
+  silently — and results are cached per request, since this sits in the hot
+  path of every view.
 - **Roles as data — step 1** (docs/ROLES.md). `Role` gains `key`, `label`,
   `capabilities`, `is_system` and `rank`, with a closed `CAPABILITIES`
   vocabulary. Role *names* become free text so a client can have a "Site
