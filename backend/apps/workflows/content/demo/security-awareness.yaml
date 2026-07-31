@@ -1,0 +1,79 @@
+# Scene-shell module: phishing awareness with a gated "report correctly" path.
+workflow: Security Awareness Module
+prefix: SEC
+description: Interactive phishing-awareness scenario with pass and retake endings
+
+states:
+  - name: New Email
+    role: participant
+  - name: Check Sender
+    role: participant
+  - name: Decide What To Do
+    role: participant
+  - name: Passed
+    terminal: true
+  - name: Must Retake
+    terminal: true
+
+transitions:
+  - New Email -> Check Sender:
+      name: Inspect the sender address
+      rules:
+        - if: {field: checked_sender, op: is_false}
+          then: {set_metadata: {checked_sender: true, score: 50}}
+  - New Email -> Decide What To Do: Decide straight away
+  - Check Sender -> Decide What To Do: Return to the inbox
+  - New Email -> Must Retake:
+      name: Open the link immediately
+      rules:
+        - if: {field: opened_link, op: is_false}
+          then: {set_metadata: {opened_link: true, score: 0}}
+  - Decide What To Do -> Passed:
+      name: Report it to Security
+      rules:
+        - if: {field: checked_sender, op: is_false}
+          then:
+            block_transition: true
+            reason: Check the sender first; reports must include what you verified.
+        - if: {field: checked_sender, op: is_true}
+          then: {set_metadata: {reported_phishing: true, score: 100}}
+  - Decide What To Do -> Check Sender:
+      name: Go back and check the sender
+      rules:
+        - if: {field: checked_sender, op: is_false}
+          then: {set_metadata: {checked_sender: true, score: 60}}
+  - Decide What To Do -> Must Retake:
+      name: Click the link anyway
+      rules:
+        - if: {field: opened_link, op: is_false}
+          then: {set_metadata: {opened_link: true, score: 10}}
+
+ui:
+  shell: scene
+  title_field: trainee_name
+  scene_config:
+    New Email:
+      speaker: Inbox
+      dialogue: >
+        A message says "URGENT: password reset required in 15 minutes" and asks
+        you to open a link now.
+    Check Sender:
+      speaker: You
+      dialogue: >
+        You check the sender and spot an external domain that does not match our
+        support address. Good catch.
+    Decide What To Do:
+      speaker: Narrator
+      dialogue: >
+        You have one suspicious email and a choice. Reporting with evidence helps
+        the team protect everyone else.
+    Passed:
+      speaker: Security Team
+      dialogue: >
+        Correct. You reported the phishing attempt and recorded your checks.
+        Attempt {{instance.reference_number}} complete with score {{metadata.score}}.
+    Must Retake:
+      speaker: Security Team
+      dialogue: >
+        This path demonstrates a risky choice. Please retake the module and
+        practise checking sender details before acting.

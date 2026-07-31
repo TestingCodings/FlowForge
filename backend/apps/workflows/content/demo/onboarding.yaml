@@ -1,0 +1,51 @@
+# Parent workflow for a new starter's first-week setup.
+workflow: New Starter Onboarding
+prefix: ONB
+description: Guided onboarding with child tasks for mandatory People checks
+
+states:
+  - name: Intake
+    role: participant
+    form:
+      name: Starter Intake
+      required_to_transition: false
+      fields:
+        - {name: employee_name, type: text, label: Employee name, required: true}
+        - {name: job_title, type: text, label: Job title, required: true}
+        - {name: start_date, type: date, label: Start date, required: true}
+  - name: Provisioning
+    role: participant
+    form:
+      name: Access Checklist
+      required_to_transition: false
+      fields:
+        - {name: laptop_issued, type: checkbox, label: Laptop issued, required: true}
+        - {name: account_created, type: checkbox, label: Account created, required: true}
+  - name: Ready for Day One
+    role: approver
+    sla_hours: 8
+  - name: Complete
+    terminal: true
+
+transitions:
+  - Intake -> Provisioning: Start Provisioning
+  - Provisioning -> Ready for Day One:
+      name: Mark Provisioning Complete
+      rules:
+        - if: {field: account_created, op: is_false}
+          then:
+            block_transition: true
+            reason: Create the starter account before handover to the line manager.
+  - Ready for Day One -> Complete:
+      name: Confirm Starter Arrived
+      requires_approval: true
+
+ui:
+  shell: stepped_form
+  title_field: employee_name
+  children:
+    workflows: [Training & Certification, Security Awareness Module]
+    shell: table
+    roll_up: true
+  instance_view:
+    panels: [state_graph, forms, children, timeline]
