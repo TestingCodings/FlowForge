@@ -36,8 +36,14 @@ and hangs silently, because Docker does not work on this machine.
 
 ```bash
 cd backend && DJANGO_SETTINGS_MODULE=config.settings.local_sqlite python -m pytest -q
-cd frontend && npm run build          # tsc -b, strict — an implicit any fails CI
+cd frontend && npm test               # vitest, ~2s
+cd frontend && npm run build          # tsc -b, strict, an implicit any fails CI
 ```
+
+Frontend unit tests cover **pure logic only**: field resolution, capability
+checks, translation catalogues. Components are covered by Playwright against
+a real browser and a real API, which tests a component better than jsdom
+does. Put a new test next to the module it covers, named `*.test.ts`.
 
 E2E needs both servers up, and the tags set at generation time as well as run
 time:

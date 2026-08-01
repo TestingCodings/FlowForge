@@ -103,6 +103,23 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   placeholders.
 
 ### Added
+- **Frontend unit tests** (Vitest, 48 tests). The frontend had no unit-test
+  framework at all: 11,371 lines whose pure logic was only ever exercised
+  through a browser. Coverage is deliberately narrow, targeting the small
+  functions everything else depends on, because components are better tested
+  by Playwright against a real API than by jsdom. Shell field resolution,
+  UI capability checks, and translation catalogue integrity are covered.
+
+  Two real defects surfaced immediately. `roleHas` **threw a TypeError** on an
+  unrecognised capability where the backend fails closed, so a typo at a call
+  site would have taken the page down rather than hiding one control. And the
+  frontend capability list had **drifted from the backend's** by nine entries,
+  so the UI and API disagreed about who could do what. Both fixed.
+
+  The catalogue tests close a subtler hole: because a missing translation
+  falls back to en-GB, a misspelled key in a locale serves English forever and
+  reads fine, so nobody notices. Orphan keys and dropped placeholders are now
+  caught.
 - **Roles as data — step 3, the flip** (docs/ROLES.md). Every permission gate
   now goes through capabilities: 39 inline call sites plus the six DRF
   permission classes, which between them guard 32 viewsets. No role-based

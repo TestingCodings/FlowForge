@@ -20,36 +20,65 @@ import { UserProfile } from "../types/api";
  * replaced by a set the API returns, and callers don't change.
  */
 export type Capability =
-  | "workflow.design"    // build/edit workflows, forms, rules — the creator sphere
   | "workflow.view"
+  | "workflow.design"    // build/edit workflows, forms, rules — the creator sphere
+  | "workflow.publish"
+  | "instance.view"
   | "instance.create"
   | "instance.transition"
   | "instance.approve"
   | "instance.comment"
   | "instance.metadata"
+  | "instance.relate"    // re-parent, link — structural, not annotation
+  | "form.submit"
   | "media.upload"
+  | "media.delete"
+  | "user.view"
   | "user.manage"
+  | "secret.manage"
+  | "hook.manage"
+  | "audit.view"
   | "workspace.manage";
 
 const ALL = ["platform_admin", "workflow_designer", "approver", "participant", "viewer"];
 const DESIGNERS = ["platform_admin", "workflow_designer"];
 
+const PARTICIPANT_UP = ["platform_admin", "workflow_designer", "approver", "participant"];
+
 const CAPABILITY_ROLES: Record<Capability, string[]> = {
-  "workflow.design":     DESIGNERS,
   "workflow.view":       ALL,
-  "instance.create":     ["platform_admin", "workflow_designer", "approver", "participant"],
-  "instance.transition": ["platform_admin", "workflow_designer", "approver", "participant"],
+  "workflow.design":     DESIGNERS,
+  "workflow.publish":    DESIGNERS,
+  "instance.view":       ALL,
+  "instance.create":     PARTICIPANT_UP,
+  "instance.transition": PARTICIPANT_UP,
   "instance.approve":    ["platform_admin", "workflow_designer", "approver"],
   "instance.comment":    ALL,
-  "instance.metadata":   ["platform_admin", "workflow_designer", "approver", "participant"],
-  "media.upload":        ["platform_admin", "workflow_designer", "approver", "participant"],
+  "instance.metadata":   PARTICIPANT_UP,
+  "instance.relate":     PARTICIPANT_UP,
+  "form.submit":         PARTICIPANT_UP,
+  "media.upload":        PARTICIPANT_UP,
+  "media.delete":        DESIGNERS,
+  "user.view":           ALL,
   "user.manage":         ["platform_admin"],
+  "secret.manage":       DESIGNERS,
+  "hook.manage":         DESIGNERS,
+  "audit.view":          DESIGNERS,
   "workspace.manage":    ["platform_admin"],
 };
 
-/** Pure predicate — usable outside React and easy to test. */
+/**
+ * Pure predicate, usable outside React and easy to test.
+ *
+ * Fails closed on a capability this map does not know, matching
+ * `has_capability` on the backend. It previously indexed the map directly and
+ * threw a TypeError instead, so a typo at a call site would have taken the
+ * page down rather than hiding one control.
+ */
 export function roleHas(roles: string[], capability: Capability): boolean {
-  return roles.some((r) => CAPABILITY_ROLES[capability].includes(r));
+  const permitted = CAPABILITY_ROLES[capability];
+  if (!permitted) return false;
+  return roles.some((r) => permitted.includes(r));
 }
 
 export function useMyRoles(): string[] {

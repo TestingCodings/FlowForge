@@ -15,7 +15,7 @@ jobs:
   # strict-mode type errors fail here in ~2 minutes instead of surfacing (or
   # hiding) inside the much slower e2e job.
   frontend-build:
-    name: Frontend build (tsc -b + vite)
+    name: Frontend unit tests + build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,6 +31,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
 
       - name: Build
         working-directory: frontend
