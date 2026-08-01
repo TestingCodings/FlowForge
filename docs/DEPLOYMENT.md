@@ -237,3 +237,51 @@ are different claims and only one of them has been demonstrated.
   exists but nothing consumes it, so visitors get no banner warning that data
   resets nightly.
 - Backups (`pg_dump` rotation) and uptime monitoring are not set up.
+
+---
+
+## 8. Public shopfront on cortexa.solutions
+
+**Status:** planned. Blocked on the VPS, same as the rest of §1-§7.
+
+A page on the existing cortexa.solutions site, linked from the header, that
+explains FlowForge and lets a visitor try it. The audience is colleagues and
+prospective employers who will arrive from LinkedIn, so the page has to work
+without any prior context.
+
+### What goes on it
+- A short explanation of what FlowForge is and the problem it solves.
+- The quality report: test counts, coverage, CI gates, and the gaps. Real
+  numbers are the strongest signal for this audience, and naming the gaps is
+  what makes the good numbers believable.
+- A feature summary with screenshots.
+- Buttons into the live demo.
+
+### How a visitor gets in
+**Pre-made accounts, one click per role.** Not a signup form.
+
+Self-registration is disabled on the demo on purpose (§2.2: open registration
+on a public box is a spam-account vector). Re-enabling it would mean rate
+limits, expiry, and cleanup, all to produce a worse demo. A row of buttons
+reading "Try as Site Manager", "Try as Approver", "Try as Viewer" gets someone
+into the product in one click and shows off the role system before they have
+clicked anything else.
+
+Implementation: `/api/demo-info/` already serves the demo accounts when
+`DEMO_MODE` is on, and already returns nothing anywhere else. The page reads
+it and posts to `/api/auth/login/`. No new endpoint needed.
+
+### Stats are a snapshot, not a live feed
+Numbers are baked in with an "as of" date and regenerated when the suite
+changes materially. A live CI badge would eventually show a prospective
+employer a red build, or a run in progress, with no context. A snapshot is
+always a number somebody has looked at.
+
+### Order of work
+1. VPS, DNS, first deploy (§7 lists what is still unverified).
+2. Demo account buttons wired to `/api/demo-info/`.
+3. The page itself in the cortexa-frontend repo, plus the header link.
+4. Screenshots refreshed from the deployed demo rather than local.
+
+Step 1 gates everything else. Nothing here is worth building against a demo
+that has never run.
