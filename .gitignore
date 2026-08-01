@@ -78,3 +78,6 @@ backend/media_uploads/
 
 # Claude Code per-machine permission state (launch.json is shared)
 .claude/settings.local.json
+
+# Vitest coverage output
+frontend/coverage/
