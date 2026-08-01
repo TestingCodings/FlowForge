@@ -24,8 +24,11 @@ permissions-hardening idea was adopted, the rest closed as duplicate).
 | WS-G i18n breadth | ✅ done (ae2ad5e) | Claude |
 | WS-H demo deployment | **code done** (VPS steps pending) | Claude |
 | WS-I scene shell | **done** | Claude |
-| WS-J scene authoring UI | in progress (issue #8) | Copilot |
-| WS-K app content as data | in progress | Claude |
+| WS-J scene authoring UI | done (PR #9) | Copilot |
+| WS-K app content as data | done (load_app + classic port) | Claude |
+| WS-L Northwind People + scene module | done (PR #11) | Copilot |
+| WS-M roles as data | done (steps 1-3, gates flipped) | Claude |
+| WS-N test depth | done (frontend units, 10 E2E scenarios) | Claude |
 
 ## How to use this
 - **One agent per workstream.** Branch per workstream (`feat/<id>-<slug>`),
