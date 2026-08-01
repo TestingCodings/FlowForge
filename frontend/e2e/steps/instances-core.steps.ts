@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { Given, When, Then, apiFetch, listAllWorkflows } from "./fixtures";
+import { Given, When, Then, apiFetch, createWorkflowFixture, listAllWorkflows, sweepFixtures } from "./fixtures";
 
 /**
  * @core instance lifecycle steps. Each scenario creates its own throwaway
@@ -86,4 +86,65 @@ Then("the metadata shows the new value", async ({ page }) => {
 Then("the timeline records a metadata update", async ({ page }) => {
   const timeline = page.locator(".card", { has: page.getByRole("heading", { name: /timeline/i }) });
   await expect(timeline.getByText(/metadata/i).first()).toBeVisible();
+});
+
+/* ── Rules blocking a transition ─────────────────────────────────────────
+ *
+ * The engine having the final word is the product's central claim, and a
+ * blocked transition is where a user meets it. What matters is not only that
+ * the move is refused but that the rule's own reason reaches the screen: the
+ * reason text is written by whoever authored the rule, so it is the product's
+ * way of explaining a process to the person following it.
+ */
+
+const BLOCK_REASON = "Assign an engineer before scheduling this job.";
+
+Given("I am viewing an instance whose transition is blocked by a rule", async ({ page }) => {
+  await sweepFixtures(page);
+
+  const wf = await createWorkflowFixture(page, {
+    label: "RuleGate",
+    prefix: "RGT",
+    states: [{ name: "Reported" }, { name: "Scheduled" }, { name: "Done", terminal: true }],
+    transitions: [
+      { name: "Schedule", from: "Reported", to: "Scheduled" },
+      { name: "Complete", from: "Scheduled", to: "Done" },
+    ],
+    // No `engineer` key, so the rule below refuses the move.
+    instances: [{ metadata: { summary: "Chiller losing pressure" } }],
+  });
+
+  const schedule = (wf.transitions ?? []).find((t: any) => t.name === "Schedule");
+  const rule = await apiFetch(page, "POST", "/rules/", {
+    workflow_definition: wf.id,
+    transition: schedule.id,
+    condition: { field: "engineer", operator: "is_false" },
+    action: { type: "block_transition", reason: BLOCK_REASON },
+    priority: 1,
+  });
+  expect(rule.status, `rule create failed: ${JSON.stringify(rule.json)}`).toBe(201);
+
+  const list = await apiFetch(page, "GET", `/instances/?workflow_definition=${wf.id}`);
+  const instance = ((list.json as any).results ?? [])[0];
+  (page as any)._ruleInstance = instance;
+
+  await page.goto(`/instances/${instance.id}`);
+  await expect(page.getByRole("heading", { name: /actions/i })).toBeVisible();
+});
+
+When("I attempt the blocked transition", async ({ page }) => {
+  await page.locator("button.transition-btn").filter({ hasText: "Schedule" }).first().click();
+});
+
+Then("I see the reason the transition was blocked", async ({ page }) => {
+  await expect(page.getByText("Transition blocked")).toBeVisible({ timeout: 10_000 });
+  // The rule author's words, verbatim. A generic "not allowed" would be a
+  // regression even though the move is still correctly refused.
+  await expect(page.getByText(BLOCK_REASON)).toBeVisible();
+});
+
+Then("the instance stays in its current state", async ({ page }) => {
+  const instance = (page as any)._ruleInstance;
+  const fresh = await apiFetch(page, "GET", `/instances/${instance.id}/`);
+  expect((fresh.json as any).current_state_name).toBe("Reported");
 });

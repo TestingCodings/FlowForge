@@ -33,7 +33,7 @@ export const test = base.extend<{ signedInAs: (email: string) => Promise<void> }
   },
 });
 
-export const { Given, When, Then } = createBdd(test);
+export const { Given, When, Then, After } = createBdd(test);
 
 /** Call the FlowForge API from inside the page, reusing the UI session's JWT. */
 export async function apiFetch(page: Page, method: string, path: string, body?: unknown) {

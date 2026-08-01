@@ -914,8 +914,15 @@ function FormFieldInput({
   onChange: (v: unknown) => void;
   workflowInstanceId: string;
 }) {
+  // The label must point at its control. Without htmlFor/id the association
+  // exists only visually: a screen reader announces an unlabelled textbox,
+  // and clicking the label does not focus the field.
+  const fieldId = `ff-field-${field.name}`;
   const label = (
-    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>
+    <label
+      htmlFor={fieldId}
+      style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}
+    >
       {field.label || field.name}
       {field.required && <span style={{ color: "var(--danger)", marginLeft: 3 }}>*</span>}
     </label>
@@ -953,7 +960,7 @@ function FormFieldInput({
     return (
       <div style={{ gridColumn: "1 / -1" }}>
         {label}
-        <textarea
+        <textarea id={fieldId}
           rows={3}
           value={(value as string) ?? ""}
           onChange={e => onChange(e.target.value)}
@@ -968,7 +975,7 @@ function FormFieldInput({
     return (
       <div>
         {label}
-        <select
+        <select id={fieldId}
           value={(value as string) ?? ""}
           onChange={e => onChange(e.target.value)}
           style={inputStyle}
@@ -1002,6 +1009,7 @@ function FormFieldInput({
     <div>
       {label}
       <input
+        id={fieldId}
         type={field.type === "number" || field.type === "currency" ? "number"
           : field.type === "date" ? "date"
           : field.type === "datetime" ? "datetime-local"

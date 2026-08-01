@@ -123,6 +123,9 @@ export default function WorkflowYamlPage() {
           borderRight: "1px solid var(--border)",
         }}>
           <textarea
+            // The editor is the primary control on this page and had no
+            // accessible name, so assistive tech announced only "textbox".
+            aria-label="Workflow YAML"
             value={text}
             onChange={(e) => setText(e.target.value)}
             spellCheck={false}

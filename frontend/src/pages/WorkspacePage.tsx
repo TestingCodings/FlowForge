@@ -148,26 +148,26 @@ export default function WorkspacePage() {
           <div className="card">
             <div className="card-header"><h3>Formatting <Hint tip="The font and date style used across the whole platform for every user." below /></h3></div>
             <div className="form-group">
-              <label>Font</label>
-              <select value={font} onChange={e => setFont(e.target.value)}>
+              <label htmlFor="ws-font">Font</label>
+              <select id="ws-font" value={font} onChange={e => setFont(e.target.value)}>
                 {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Date format</label>
-              <select value={dateFormat} onChange={e => setDateFormat(e.target.value)}>
+              <label htmlFor="ws-dateFormat">Date format</label>
+              <select id="ws-dateFormat" value={dateFormat} onChange={e => setDateFormat(e.target.value)}>
                 {DATE_FORMAT_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Language</label>
-              <select value={locale} onChange={e => setLocale(e.target.value)}>
+              <label htmlFor="ws-locale">Language</label>
+              <select id="ws-locale" value={locale} onChange={e => setLocale(e.target.value)}>
                 {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Density</label>
-              <select value={density} onChange={e => setDensity(e.target.value)}>
+              <label htmlFor="ws-density">Density</label>
+              <select id="ws-density" value={density} onChange={e => setDensity(e.target.value)}>
                 <option value="comfortable">Comfortable (default)</option>
                 <option value="compact">Compact</option>
               </select>
