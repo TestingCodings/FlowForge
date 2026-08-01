@@ -14,6 +14,10 @@ Usage in views:
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
+# Retained for the shadow tests and for `has_min_role`, which is now only a
+# convenience for "this role or above" comparisons — not a permission gate.
+# Every gate goes through capabilities. This list disappears once nothing
+# reads it.
 ROLE_HIERARCHY = [
     "viewer",
     "participant",
@@ -131,47 +135,55 @@ def require_capability(user, capability: str, action: str = "perform this action
 
 
 # ── DRF Permission classes ─────────────────────────────────────────────────
+#
+# These now check capabilities rather than positions in ROLE_HIERARCHY. The
+# capability chosen for each is the one the guarded endpoints actually need,
+# and each is granted to exactly the roles the old hierarchy check admitted —
+# so this changes who is permitted nothing. The class names are kept because
+# they read well at the call site and appear in a dozen viewsets; what they
+# mean underneath is now data.
+
 
 class IsViewer(BasePermission):
-    message = "At least viewer role required."
+    message = "You do not have permission to view this."
 
     def has_permission(self, request, view):
-        return has_min_role(request.user, "viewer")
+        return has_capability(request.user, "workflow.view")
 
 
 class IsParticipant(BasePermission):
-    message = "At least participant role required."
+    message = "You do not have permission to create or modify instances."
 
     def has_permission(self, request, view):
-        return has_min_role(request.user, "participant")
+        return has_capability(request.user, "instance.create")
 
 
 class IsApprover(BasePermission):
-    message = "At least approver role required."
+    message = "You do not have permission to approve."
 
     def has_permission(self, request, view):
-        return has_min_role(request.user, "approver")
+        return has_capability(request.user, "instance.approve")
 
 
 class IsWorkflowDesigner(BasePermission):
-    message = "At least workflow_designer role required."
+    message = "You do not have permission to design workflows."
 
     def has_permission(self, request, view):
-        return has_min_role(request.user, "workflow_designer")
+        return has_capability(request.user, "workflow.design")
 
 
 class IsPlatformAdmin(BasePermission):
-    message = "Platform admin role required."
+    message = "You do not have permission to administer the workspace."
 
     def has_permission(self, request, view):
-        return has_role(request.user, "platform_admin")
+        return has_capability(request.user, "workspace.manage")
 
 
 class ReadOnlyOrParticipant(BasePermission):
-    """GET/HEAD/OPTIONS: viewer+. Writes: participant+."""
-    message = "Participant role required to modify resources."
+    """Reads need workflow.view; writes need instance.create."""
+    message = "You do not have permission to modify this."
 
     def has_permission(self, request, view):
         if request.method in ("GET", "HEAD", "OPTIONS"):
-            return has_min_role(request.user, "viewer")
-        return has_min_role(request.user, "participant")
+            return has_capability(request.user, "workflow.view")
+        return has_capability(request.user, "instance.create")

@@ -7,8 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import (
     IsViewer,
-    require_min_role,
-    require_role,
+    require_capability,
 )
 from apps.audit.models import AuditActionType, AuditLog
 from apps.audit.services import rule_fired, transition_applied
@@ -59,7 +58,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "participant", action="create a workflow instance")
+        require_capability(request.user, "instance.create", action="create a workflow instance")
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
@@ -73,9 +72,9 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
     def _require_transition_role(self, request, tr):
         if tr.requires_approval:
-            require_min_role(request.user, "approver", action=f"fire '{tr.name}' (requires approval)")
+            require_capability(request.user, "instance.approve", action=f"fire '{tr.name}' (requires approval)")
         else:
-            require_min_role(request.user, "participant", action=f"fire '{tr.name}'")
+            require_capability(request.user, "instance.transition", action=f"fire '{tr.name}'")
 
     def _fire_transition(self, request, instance, tr):
         """Run the full transition pipeline (engine, tasks, audit, events).
@@ -317,7 +316,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         """Participant+ may edit metadata. Supports If-Match for optimistic locking."""
         from django.utils.dateparse import parse_datetime
 
-        require_min_role(request.user, "participant", action="edit instance metadata")
+        require_capability(request.user, "instance.metadata", action="edit instance metadata")
         instance = self.get_object()
 
         # Check If-Match precondition for optimistic locking
@@ -378,7 +377,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="move")
     def move(self, request, pk=None):
         """Re-parent an instance (or detach with parent=null). Participant+."""
-        require_min_role(request.user, "participant", action="move an instance")
+        require_capability(request.user, "instance.relate", action="move an instance")
         instance = self.get_object()
         parent_id = request.data.get("parent", None)
 
@@ -454,7 +453,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     def link(self, request, pk=None):
         """Create a relationship from this instance to another. Participant+."""
         from .relationships import create_relationship, InstanceRelationshipSerializer
-        require_min_role(request.user, "participant", action="link instances")
+        require_capability(request.user, "instance.relate", action="link instances")
         instance = self.get_object()
 
         to_ref = (request.data.get("to_instance") or "").strip()
@@ -493,7 +492,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
     def unlink(self, request, pk=None, rel_id=None):
         """Remove a relationship. Participant+ (or the creator)."""
         from .relationships import InstanceRelationship
-        require_min_role(request.user, "participant", action="remove an instance link")
+        require_capability(request.user, "instance.relate", action="remove an instance link")
         instance = self.get_object()
         try:
             rel = InstanceRelationship.objects.get(id=rel_id)

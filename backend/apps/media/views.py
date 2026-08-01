@@ -8,7 +8,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsViewer, has_min_role, require_min_role
+from apps.accounts.permissions import IsViewer, has_capability, require_capability
 
 from .models import MediaAsset
 from .serializers import MediaAssetSerializer
@@ -35,7 +35,7 @@ class MediaAssetViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "delete", "head", "options"]
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "participant", action="upload a file")
+        require_capability(request.user, "media.upload", action="upload a file")
 
         upload = request.FILES.get("file")
         if upload is None:
@@ -88,7 +88,7 @@ class MediaAssetViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         asset = self.get_object()
         is_uploader = asset.uploaded_by_id == request.user.id
-        if not (is_uploader or has_min_role(request.user, "workflow_designer")):
+        if not (is_uploader or has_capability(request.user, "media.delete")):
             raise PermissionDenied("You can only delete assets you uploaded.")
         # Best-effort storage cleanup: a missing file must not block the row
         # being removed.

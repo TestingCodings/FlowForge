@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsViewer, IsWorkflowDesigner, ReadOnlyOrParticipant, require_min_role
+from apps.accounts.permissions import IsViewer, IsWorkflowDesigner, ReadOnlyOrParticipant, require_capability
 
 from .models import Rule, State, Transition, WorkflowDefinition
 from .serializers import (
@@ -35,15 +35,15 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         return WorkflowDefinitionSerializer
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="create a workflow definition")
+        require_capability(request.user, "workflow.design", action="create a workflow definition")
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="edit a workflow definition")
+        require_capability(request.user, "workflow.design", action="edit a workflow definition")
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="delete a workflow definition")
+        require_capability(request.user, "workflow.design", action="delete a workflow definition")
         try:
             return super().destroy(request, *args, **kwargs)
         except ProtectedError as exc:
@@ -72,7 +72,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         draft clone at version+1 with all states, transitions, and rules copied.
         Returns the new draft workflow definition.
         """
-        require_min_role(request.user, "workflow_designer", action="publish a new workflow version")
+        require_capability(request.user, "workflow.publish", action="publish a new workflow version")
         original = self.get_object()
 
         # Stamp published_at on the original if not already set
@@ -153,7 +153,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         Refused with 409 if the workflow has instances — publish a new
         version instead (the builder offers this flow on 409).
         """
-        require_min_role(request.user, "workflow_designer", action="edit a workflow definition")
+        require_capability(request.user, "workflow.design", action="edit a workflow definition")
         workflow = self.get_object()
 
         instance_count = workflow.instances.count()
@@ -338,7 +338,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         """Set the presentation schema (Layer 2). workflow_designer+."""
         from .ui_schema import validate_ui_schema
 
-        require_min_role(request.user, "workflow_designer", action="edit workflow UI schema")
+        require_capability(request.user, "workflow.design", action="edit workflow UI schema")
         wf = self.get_object()
         ui_schema = request.data.get("ui_schema")
         error = validate_ui_schema(ui_schema)
@@ -377,7 +377,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
 
         from .portability import BundleError, export_app
 
-        require_min_role(request.user, "workflow_designer", action="export an app")
+        require_capability(request.user, "workflow.design", action="export an app")
         names = request.data.get("workflows")
         if not isinstance(names, list) or not names:
             return Response(
@@ -405,7 +405,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         """
         from .portability import BundleError, import_app
 
-        require_min_role(request.user, "workflow_designer", action="import an app")
+        require_capability(request.user, "workflow.design", action="import an app")
         wrapped = "bundle" in request.data
         bundle = request.data.get("bundle") if wrapped else request.data
         apply_identity = bool(request.data.get("apply_identity", True)) if wrapped else True
@@ -434,7 +434,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         from .dsl import DslError, lint_bundle, parse_dsl
         from .portability import BundleError, import_workflow
 
-        require_min_role(request.user, "workflow_designer", action="create a workflow from YAML")
+        require_capability(request.user, "workflow.design", action="create a workflow from YAML")
         text = request.data.get("text")
         if not isinstance(text, str) or not text.strip():
             return Response({"detail": ["'text' with the YAML document is required."]}, status=400)
@@ -480,7 +480,7 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
         """
         from .portability import BundleError, import_workflow
 
-        require_min_role(request.user, "workflow_designer", action="import a workflow")
+        require_capability(request.user, "workflow.design", action="import a workflow")
         bundle = request.data.get("bundle") if "bundle" in request.data else request.data
         rename = request.data.get("name") if "bundle" in request.data else None
         if not isinstance(bundle, dict):
@@ -511,13 +511,13 @@ class RuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsViewer]
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="create a rule")
+        require_capability(request.user, "workflow.design", action="create a rule")
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="edit a rule")
+        require_capability(request.user, "workflow.design", action="edit a rule")
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="delete a rule")
+        require_capability(request.user, "workflow.design", action="delete a rule")
         return super().destroy(request, *args, **kwargs)

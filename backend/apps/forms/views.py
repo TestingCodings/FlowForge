@@ -3,7 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsViewer, require_min_role
+from apps.accounts.permissions import IsViewer, require_capability
 
 from .models import FormDefinition, FormSubmission
 from .serializers import FormDefinitionSerializer, FormSubmissionSerializer
@@ -16,11 +16,11 @@ class FormDefinitionViewSet(viewsets.ModelViewSet):
     filterset_fields = ["workflow_definition", "state"]
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="create a form definition")
+        require_capability(request.user, "workflow.design", action="create a form definition")
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="edit a form definition")
+        require_capability(request.user, "workflow.design", action="edit a form definition")
         instance = self.get_object()
 
         # Check if form has submissions: if yes, create new version instead of editing
@@ -46,7 +46,7 @@ class FormDefinitionViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="delete a form definition")
+        require_capability(request.user, "workflow.design", action="delete a form definition")
         try:
             return super().destroy(request, *args, **kwargs)
         except ProtectedError:
@@ -65,5 +65,5 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "participant", action="submit a form")
+        require_capability(request.user, "form.submit", action="submit a form")
         return super().create(request, *args, **kwargs)

@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import require_min_role
+from apps.accounts.permissions import require_capability
 
 from .crypto import SecretsNotConfigured
 from .models import Secret
@@ -22,20 +22,20 @@ class SecretViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "delete", "head", "options"]  # no PUT/PATCH; use rotate
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="create a secret")
+        require_capability(request.user, "secret.manage", action="create a secret")
         try:
             return super().create(request, *args, **kwargs)
         except SecretsNotConfigured as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def destroy(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="delete a secret")
+        require_capability(request.user, "secret.manage", action="delete a secret")
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], url_path="rotate")
     def rotate(self, request, pk=None):
         """Replace a secret's value in place. Body: {"value": "..."}."""
-        require_min_role(request.user, "workflow_designer", action="rotate a secret")
+        require_capability(request.user, "secret.manage", action="rotate a secret")
         secret = self.get_object()
         value = request.data.get("value")
         if not value:

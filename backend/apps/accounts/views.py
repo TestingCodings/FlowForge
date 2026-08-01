@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Role, RoleName, UserRole
-from .permissions import IsPlatformAdmin, require_role
+from .permissions import IsPlatformAdmin, require_capability
 from .serializers import RegisterSerializer, UserSerializer, FlowForgeTokenObtainPairSerializer
 from .models import User
 
@@ -113,9 +113,7 @@ class WorkspaceView(generics.GenericAPIView):
 
     def put(self, request):
         from .models import Workspace
-        from .permissions import require_role
-
-        require_role(request.user, "platform_admin", action="edit workspace settings")
+        require_capability(request.user, "workspace.manage", action="edit workspace settings")
         ws = Workspace.current()
         for field in ("name", "tagline", "logo_url"):
             if field in request.data:

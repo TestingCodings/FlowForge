@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsViewer, require_min_role
+from apps.accounts.permissions import IsViewer, require_capability
 from apps.audit.services import instance_created, rule_fired, transition_applied
 from apps.notifications.services import queue_event_notifications
 from apps.tasks.services import create_tasks_for_state
@@ -65,18 +65,18 @@ class TriggerViewSet(viewsets.ModelViewSet):
     filterset_fields = ["workflow_definition", "action", "is_active"]
 
     def create(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="create a trigger")
+        require_capability(request.user, "hook.manage", action="create a trigger")
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
     def update(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="edit a trigger")
+        require_capability(request.user, "hook.manage", action="edit a trigger")
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        require_min_role(request.user, "workflow_designer", action="delete a trigger")
+        require_capability(request.user, "hook.manage", action="delete a trigger")
         return super().destroy(request, *args, **kwargs)
 
 

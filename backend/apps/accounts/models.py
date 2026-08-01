@@ -67,6 +67,10 @@ CAPABILITIES = (
     "workflow.view", "workflow.design", "workflow.publish",
     "instance.view", "instance.create", "instance.transition",
     "instance.approve", "instance.comment", "instance.metadata",
+    # Structural edits: re-parenting an instance, and linking two together.
+    # Separate from instance.metadata because a client may well want someone
+    # who can annotate work but not restructure it.
+    "instance.relate",
     "form.submit", "media.upload", "media.delete",
     "user.view", "user.create", "user.assign_roles",
     "secret.manage", "hook.manage", "audit.view",
@@ -87,6 +91,10 @@ SYSTEM_ROLES = {
             "workflow.view", "workflow.design", "workflow.publish",
             "instance.view", "instance.create", "instance.transition",
             "instance.approve", "instance.comment", "instance.metadata",
+    # Structural edits: re-parenting an instance, and linking two together.
+    # Separate from instance.metadata because a client may well want someone
+    # who can annotate work but not restructure it.
+    "instance.relate",
             "form.submit", "media.upload", "media.delete",
             "user.view", "secret.manage", "hook.manage", "audit.view",
         ],
@@ -96,7 +104,7 @@ SYSTEM_ROLES = {
         "capabilities": [
             "workflow.view", "instance.view", "instance.create",
             "instance.transition", "instance.approve", "instance.comment",
-            "instance.metadata", "form.submit", "media.upload", "user.view",
+            "instance.metadata", "instance.relate", "form.submit", "media.upload", "user.view",
         ],
     },
     "participant": {
@@ -104,7 +112,7 @@ SYSTEM_ROLES = {
         "capabilities": [
             "workflow.view", "instance.view", "instance.create",
             "instance.transition", "instance.comment", "instance.metadata",
-            "form.submit", "media.upload", "user.view",
+            "instance.relate", "form.submit", "media.upload", "user.view",
         ],
     },
     "viewer": {

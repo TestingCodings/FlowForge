@@ -103,6 +103,22 @@ project follows Semantic Versioning — see [docs/VERSIONING.md](docs/VERSIONING
   placeholders.
 
 ### Added
+- **Roles as data — step 3, the flip** (docs/ROLES.md). Every permission gate
+  now goes through capabilities: 39 inline call sites plus the six DRF
+  permission classes, which between them guard 32 viewsets. No role-based
+  gate remains outside `permissions.py`. Because each capability is granted
+  to exactly the roles the old hierarchy check admitted, nobody's permissions
+  change — the 25-cell agreement matrix still passes after the flip, and the
+  full suite is unchanged at 489.
+
+  The mapping is deliberate rather than mechanical: triggers now need
+  `hook.manage` (they are the inbound counterpart to hooks, not workflow
+  design), secrets `secret.manage`, publishing `workflow.publish`, form
+  submission `form.submit`, and media deletion `media.delete` — which
+  replaces a `has_min_role("workflow_designer")` check that had nothing to do
+  with designing workflows. A new `instance.relate` covers re-parenting and
+  linking, granted to exactly the roles holding `instance.metadata`, so a
+  client can later have someone who annotates work without restructuring it.
 - **Roles as data — step 2** (docs/ROLES.md §2.3) — `capabilities_for`,
   `has_capability` and `require_capability`, added *alongside* the role
   checks rather than replacing them. Nothing gates a request through them
