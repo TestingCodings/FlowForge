@@ -157,8 +157,16 @@ class Role(models.Model):
         created the old way still gets the right capabilities, so this step
         cannot quietly produce roles that are permitted nothing.
         """
+        # `key` and `name` must never diverge: `key` is what bundles and the
+        # API use, `name` is what get_user_roles and every legacy check read.
+        # Defaulting runs both ways because a role can arrive from either
+        # side — the enum-era code sets name, the roles API sets key. A role
+        # created with only one of them previously ended up with the other
+        # blank, and then reported its holder's role as "".
         if not self.key:
             self.key = self.name
+        if not self.name:
+            self.name = self.key
         spec = SYSTEM_ROLES.get(self.key)
         if spec:
             if not self.label:

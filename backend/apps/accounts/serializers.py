@@ -2,7 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import User
+from .models import Role, User
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -43,3 +43,47 @@ class FlowForgeTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    """Roles as an editable resource (docs/ROLES.md step 3).
+
+    `key` is read-only after creation: app bundles reference roles by key, so
+    a rename would silently break every app exported before it. `is_system`
+    is read-only always, since a client must not be able to promote their own
+    role into an undeletable one.
+    """
+
+    assigned_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Role
+        fields = (
+            "id", "key", "label", "capabilities", "rank",
+            "is_system", "description", "assigned_count",
+        )
+        read_only_fields = ("id", "is_system", "assigned_count")
+
+    def get_assigned_count(self, role) -> int:
+        return role.user_roles.count()
+
+    def validate_capabilities(self, value):
+        from .models import CAPABILITIES
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("capabilities must be a list.")
+        unknown = [c for c in value if c not in CAPABILITIES]
+        if unknown:
+            # Refused rather than dropped: a silently ignored capability
+            # produces a role that looks right and permits nothing.
+            raise serializers.ValidationError(
+                f"Unknown capabilities: {', '.join(unknown)}. "
+                f"Valid: {', '.join(sorted(CAPABILITIES))}."
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        # Belt and braces alongside read_only_fields, since `key` arriving
+        # through another code path would be a quiet break.
+        validated_data.pop("key", None)
+        return super().update(instance, validated_data)

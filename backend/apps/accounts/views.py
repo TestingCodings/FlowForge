@@ -8,7 +8,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Role, RoleName, UserRole
 from .permissions import IsPlatformAdmin, require_capability
-from .serializers import RegisterSerializer, UserSerializer, FlowForgeTokenObtainPairSerializer
+from rest_framework.exceptions import PermissionDenied
+from .serializers import (
+    FlowForgeTokenObtainPairSerializer,
+    RegisterSerializer,
+    RoleSerializer,
+    UserSerializer,
+)
 from .models import User
 
 
@@ -68,22 +74,98 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             "user":    UserSerializer(target).data,
         })
 
-    @action(detail=True, methods=["post"], url_path="roles", permission_classes=[IsAuthenticated, IsPlatformAdmin])
+    @action(detail=True, methods=["post"], url_path="roles",
+            permission_classes=[IsAuthenticated])
     def set_roles(self, request, pk=None):
-        """Replace the user's roles. Platform admin only. Body: {"roles": ["approver", "participant"]}"""
+        """Replace a user's roles. Body: {"roles": ["approver", "site_manager"]}
+
+        Validated against the Role table rather than the RoleName enum. That
+        distinction is the feature: while this checked the enum, a custom
+        role could be created but never assigned to anyone.
+
+        Two guards, both of which make the difference between a role system
+        and a footgun:
+
+        * **Nobody may assign above their own rank.** Any role carrying
+          user.assign_roles would otherwise be a route to platform admin:
+          grant yourself the higher role and you are done.
+        * **The last holder of user.assign_roles cannot lose it.** Locking
+          everyone out of role management is unrecoverable through the API,
+          so it is refused rather than warned about.
+        """
+        require_capability(request.user, "user.assign_roles", action="change a user's roles")
         user = self.get_object()
-        role_names = request.data.get("roles", [])
-        valid = {r[0] for r in RoleName.choices}
-        invalid = [r for r in role_names if r not in valid]
-        if invalid:
-            return Response({"detail": f"Invalid roles: {invalid}"}, status=status.HTTP_400_BAD_REQUEST)
+        requested = request.data.get("roles", [])
+        if not isinstance(requested, list):
+            return Response({"detail": "roles must be a list of role keys."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        roles = list(Role.objects.filter(key__in=requested))
+        missing = set(requested) - {r.key for r in roles}
+        if missing:
+            return Response(
+                {"detail": f"Unknown role(s): {', '.join(sorted(missing))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ceiling = max(
+            request.user.user_roles.select_related("role")
+            .values_list("role__rank", flat=True),
+            default=0,
+        )
+        too_senior = [r.label for r in roles if r.rank > ceiling]
+        if too_senior:
+            return Response(
+                {"detail": (
+                    f"You cannot assign a role more senior than your own: "
+                    f"{', '.join(sorted(too_senior))}."
+                )},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if self._would_orphan_role_management(user, roles):
+            return Response(
+                {"detail": (
+                    "This would remove the last user who can manage roles. "
+                    "Give another user that ability first."
+                )},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         UserRole.objects.filter(user=user).delete()
-        for name in role_names:
-            role, _ = Role.objects.get_or_create(name=name)
+        for role in roles:
             UserRole.objects.create(user=user, role=role)
 
+        user.refresh_from_db()
         return Response(UserSerializer(user).data)
+
+    @staticmethod
+    def _would_orphan_role_management(user, new_roles) -> bool:
+        """True if this change leaves nobody able to assign roles."""
+        CAP = "user.assign_roles"
+        keeps_it = any(CAP in (r.capabilities or []) for r in new_roles)
+        if keeps_it:
+            return False
+
+        # Which roles grant it is resolved in Python rather than with a
+        # `capabilities__contains` lookup: that lookup is unsupported on
+        # SQLite, so the query would work on CI's Postgres and fail in local
+        # development. There are a handful of roles, so the cost is nil.
+        granting = [
+            r.id for r in Role.objects.all() if CAP in (r.capabilities or [])
+        ]
+        if not granting:
+            return False
+
+        others = (
+            UserRole.objects.filter(role_id__in=granting).exclude(user=user).exists()
+        )
+        if others:
+            return False
+
+        # Only blocks when this user currently holds it; demoting somebody who
+        # never had it cannot orphan anything.
+        return user.user_roles.filter(role_id__in=granting).exists()
 
 
 class WorkspaceView(generics.GenericAPIView):
@@ -148,3 +230,75 @@ class WorkspaceView(generics.GenericAPIView):
             ws.ui_config = ui
         ws.save()
         return self.get(request)
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    """Manage roles (docs/ROLES.md step 3).
+
+    Reading is open to any signed-in user, because role badges and pickers
+    render for everyone. Writing needs `workspace.manage`: composing roles is
+    administering the install, not designing workflows.
+
+    The guards here matter more than the CRUD:
+
+    * **System roles are immutable.** The built-in five are what every
+      existing permission check assumes; editing one silently changes the
+      meaning of the whole install, and deleting one would strip permissions
+      from people without anyone choosing to.
+    * **A role cannot outrank its creator.** Otherwise creating a role is a
+      route to escalation: make one above yourself, assign it to yourself,
+      and the rank cap on assignment means nothing.
+    * **A role in use cannot be deleted.** Same reasoning as the system-role
+      guard, and it fails with 409 rather than cascading.
+    """
+
+    queryset = Role.objects.all().order_by("-rank", "key")
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def _max_assignable_rank(self, user) -> int:
+        """The highest rank the caller holds. Nobody may exceed their own."""
+        ranks = user.user_roles.select_related("role").values_list("role__rank", flat=True)
+        return max(ranks, default=0)
+
+    def create(self, request, *args, **kwargs):
+        require_capability(request.user, "workspace.manage", action="create a role")
+        rank = int(request.data.get("rank") or 0)
+        ceiling = self._max_assignable_rank(request.user)
+        if rank > ceiling:
+            return Response(
+                {"detail": (
+                    f"A role cannot outrank you. Your highest rank is {ceiling}; "
+                    f"this role asks for {rank}."
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        require_capability(request.user, "workspace.manage", action="edit a role")
+        if self.get_object().is_system:
+            raise PermissionDenied(
+                "Built-in roles cannot be edited. Create a custom role instead."
+            )
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, partial=True, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        require_capability(request.user, "workspace.manage", action="delete a role")
+        role = self.get_object()
+        if role.is_system:
+            raise PermissionDenied("Built-in roles cannot be deleted.")
+
+        holders = role.user_roles.count()
+        if holders:
+            return Response(
+                {"detail": (
+                    f"'{role.label}' is in use by {holders} user(s) and cannot be "
+                    "deleted. Reassign them first."
+                )},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)

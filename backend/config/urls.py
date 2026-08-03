@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet, WorkspaceView
+from apps.accounts.views import RegisterView, LoginView, MeView, UserViewSet, WorkspaceView, RoleViewSet
 from apps.audit.views import AuditLogAdminViewSet, AuditTrailByInstanceView
 from apps.forms.views import FormDefinitionViewSet, FormSubmissionViewSet
 from apps.instances.views import WorkflowInstanceViewSet
@@ -23,6 +23,7 @@ from .health import demo_info, health_check
 
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
+router.register(r"roles", RoleViewSet, basename="role")
 router.register(r"workflows", WorkflowDefinitionViewSet, basename="workflow")
 router.register(r"states", StateViewSet, basename="state")
 router.register(r"transitions", TransitionViewSet, basename="transition")
