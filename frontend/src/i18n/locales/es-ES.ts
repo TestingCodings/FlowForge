@@ -17,6 +17,7 @@ export const esES: Catalogue = {
   "nav.templates": "Plantillas",
   "nav.auditLog": "Registro de auditoría",
   "nav.users": "Usuarios",
+  "nav.roles": "Roles",
   "nav.workspace": "Espacio de trabajo",
   "nav.userGuide": "Guía del usuario",
 

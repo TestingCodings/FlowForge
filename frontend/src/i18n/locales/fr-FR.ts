@@ -17,6 +17,7 @@ export const frFR: Catalogue = {
   "nav.templates": "Modèles",
   "nav.auditLog": "Journal d'audit",
   "nav.users": "Utilisateurs",
+  "nav.roles": "Rôles",
   "nav.workspace": "Espace de travail",
   "nav.userGuide": "Guide de l'utilisateur",
 

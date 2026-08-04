@@ -383,3 +383,19 @@ export interface DemoInfo {
   notice: string;
   accounts: { email: string; password: string; role: string }[];
 }
+
+/**
+ * A role as data (docs/ROLES.md). `key` is the stable identifier bundles and
+ * the API use; `label` is what a person reads. `is_system` marks the built-in
+ * five, which cannot be edited or deleted.
+ */
+export interface Role {
+  id: string;
+  key: string;
+  label: string;
+  capabilities: string[];
+  rank: number;
+  is_system: boolean;
+  description: string;
+  assigned_count: number;
+}

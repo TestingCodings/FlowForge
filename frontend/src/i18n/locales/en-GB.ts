@@ -18,6 +18,7 @@ export const enGB = {
   "nav.templates": "Templates",
   "nav.auditLog": "Audit Log",
   "nav.users": "Users",
+  "nav.roles": "Roles",
   "nav.workspace": "Workspace",
   "nav.userGuide": "User Guide",
 

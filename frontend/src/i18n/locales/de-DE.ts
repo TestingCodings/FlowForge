@@ -17,6 +17,7 @@ export const deDE: Catalogue = {
   "nav.templates": "Vorlagen",
   "nav.auditLog": "Auditprotokoll",
   "nav.users": "Benutzer",
+  "nav.roles": "Rollen",
   "nav.workspace": "Arbeitsbereich",
   "nav.userGuide": "Benutzerhandbuch",
 

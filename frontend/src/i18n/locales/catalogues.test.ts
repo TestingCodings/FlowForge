@@ -74,8 +74,8 @@ describe("coverage across locales", () => {
     const counts = Object.fromEntries(
       Object.entries(TRANSLATIONS).map(([name, c]) => [name, Object.keys(c).length]),
     );
-    expect(counts).toEqual({ "es-ES": 26, "fr-FR": 41, "de-DE": 41 });
-    expect(baseKeys.length).toBe(41);
+    expect(counts).toEqual({ "es-ES": 27, "fr-FR": 42, "de-DE": 42 });
+    expect(baseKeys.length).toBe(42);
   });
 
   it("keeps fully-translated locales complete", () => {

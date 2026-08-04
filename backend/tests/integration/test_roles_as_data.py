@@ -126,3 +126,51 @@ class TestNothingElseChanged:
 
     def test_str_is_still_human_readable(self):
         assert str(Role.objects.create(name=RoleName.APPROVER)) == "Approver"
+
+
+@pytest.mark.django_db
+class TestSystemRolesNeverDrift:
+    """Built-in roles must match SYSTEM_ROLES exactly.
+
+    Regression: `instance.relate` was added to CAPABILITIES during the
+    capability flip, but Role.save() only filled capabilities when they were
+    blank, so existing rows kept the older list. Every built-in role, platform
+    admin included, was left unable to re-parent or link an instance on any
+    database migrated before that change. The failure was invisible from the
+    tests because they create roles fresh.
+    """
+
+    @pytest.mark.parametrize("key", list(SYSTEM_ROLES))
+    def test_saved_role_matches_the_spec(self, key):
+        role = Role.objects.create(name=key)
+        assert set(role.capabilities) == set(SYSTEM_ROLES[key]["capabilities"])
+        assert role.rank == SYSTEM_ROLES[key]["rank"]
+
+    def test_a_stale_role_is_repaired_on_save(self):
+        """The mechanism that stops this recurring."""
+        role = Role.objects.create(name=RoleName.PLATFORM_ADMIN)
+        Role.objects.filter(pk=role.pk).update(capabilities=["workflow.view"])
+
+        stale = Role.objects.get(pk=role.pk)
+        assert stale.capabilities == ["workflow.view"]
+        stale.save()
+
+        assert set(Role.objects.get(pk=role.pk).capabilities) == set(CAPABILITIES)
+
+    def test_every_capability_reaches_the_platform_admin(self):
+        """A capability nobody holds denies everyone, which is how the
+        original bug behaved."""
+        admin = Role.objects.create(name=RoleName.PLATFORM_ADMIN)
+        missing = set(CAPABILITIES) - set(admin.capabilities)
+        assert not missing, f"platform admin cannot {missing}"
+
+    def test_a_custom_role_is_not_overwritten(self):
+        """Only built-ins are code-authoritative; a client's own role must
+        keep exactly what was configured."""
+        role = Role.objects.create(
+            key="site_manager", name="site_manager", label="Site Manager",
+            capabilities=["workflow.view"], rank=25,
+        )
+        role.save()
+        assert Role.objects.get(pk=role.pk).capabilities == ["workflow.view"]
+        assert Role.objects.get(pk=role.pk).is_system is False

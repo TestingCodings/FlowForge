@@ -169,13 +169,17 @@ class Role(models.Model):
             self.name = self.key
         spec = SYSTEM_ROLES.get(self.key)
         if spec:
-            if not self.label:
-                self.label = spec["label"]
-            if not self.capabilities:
-                self.capabilities = list(spec["capabilities"])
-            if not self.rank:
-                self.rank = spec["rank"]
-            # Built-ins are marked as such so they can't be deleted later.
+            # For a built-in role the code is authoritative, so its
+            # capabilities are re-synced on every save rather than only when
+            # blank. Filling only-when-empty let the database drift: adding
+            # `instance.relate` to CAPABILITIES left every existing system
+            # role without it, and a platform admin was refused permission to
+            # link instances on any install migrated before that change.
+            # The API refuses to edit system roles anyway, so nothing is lost
+            # by treating SYSTEM_ROLES as the single source of truth.
+            self.label = spec["label"]
+            self.capabilities = list(spec["capabilities"])
+            self.rank = spec["rank"]
             self.is_system = True
         elif not self.label:
             self.label = self.key.replace("_", " ").title()
