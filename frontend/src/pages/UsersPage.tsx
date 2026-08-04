@@ -1,22 +1,30 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Fragment, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
-import { UserProfile, ALL_ROLES, RoleName } from "../types/api";
+import { UserProfile } from "../types/api";
 import { formatDate } from "../hooks/useWorkspace";
+import { useRoles } from "../hooks/useRoles";
+import { useUsers } from "../hooks/useUsers";
+import { useMyRoles } from "../hooks/useCapabilities";
 
 export default function UsersPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<string | null>(null);
-  const [pendingRoles, setPendingRoles] = useState<RoleName[]>([]);
+  const [pendingRoles, setPendingRoles] = useState<string[]>([]);
   const [saveMsg, setSaveMsg] = useState<Record<string, string>>({});
 
-  const { data, isLoading } = useQuery<{ results: UserProfile[] }>({
-    queryKey: ["users"],
-    queryFn: async () => (await apiClient.get("/users/")).data,
-  });
+  const { data: users = [], isLoading } = useUsers();
+
+  // Read from the API, not a constant: roles are data now, so a hardcoded
+  // list would silently omit whatever this install has defined.
+  const { data: roles = [] } = useRoles();
+  const myRoles = useMyRoles();
+  const myRank = roles
+    .filter((r) => myRoles.includes(r.key))
+    .reduce((top, r) => Math.max(top, r.rank), 0);
 
   const setRolesMutation = useMutation({
-    mutationFn: async ({ userId, roles }: { userId: string; roles: RoleName[] }) =>
+    mutationFn: async ({ userId, roles }: { userId: string; roles: string[] }) =>
       (await apiClient.post(`/users/${userId}/roles/`, { roles })).data,
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["users"] });
@@ -28,16 +36,15 @@ export default function UsersPage() {
 
   const startEdit = (user: UserProfile) => {
     setEditing(user.id);
-    setPendingRoles(user.roles as RoleName[]);
+    setPendingRoles([...user.roles]);
   };
 
-  const toggleRole = (role: RoleName) => {
+  const toggleRole = (role: string) => {
     setPendingRoles((prev) =>
       prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
     );
   };
 
-  const users: UserProfile[] = (data as any)?.results ?? (Array.isArray(data) ? data : []);
 
   return (
     <div>
@@ -71,8 +78,13 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {users.map((user) => (
-                <>
-                  <tr key={user.id}>
+                // Keyed Fragment, not <>. An unkeyed fragment wrapping two
+                // <tr> siblings leaves React unable to match rows between
+                // renders: expanding the editor row made reconciliation
+                // remove a node that was no longer where it expected, which
+                // takes the whole page down rather than warning.
+                <Fragment key={user.id}>
+                  <tr>
                     <td>
                       <div className="flex items-center gap-2">
                         <div className="user-avatar" style={{ width: 28, height: 28, fontSize: "0.7rem", flexShrink: 0 }}>
@@ -89,7 +101,7 @@ export default function UsersPage() {
                         ) : (
                           user.roles.map((r) => (
                             <span key={r} className={`badge badge-role-${r}`}>
-                              {roleLabel(r)}
+                              {roles.find((x) => x.key === r)?.label ?? r}
                             </span>
                           ))
                         )}
@@ -120,16 +132,29 @@ export default function UsersPage() {
                           Select roles for {user.full_name}
                         </div>
                         <div className="role-grid mb-4">
-                          {ALL_ROLES.map(({ value, label }) => (
-                            <label
-                              key={value}
-                              className={`role-option ${pendingRoles.includes(value) ? "selected" : ""}`}
-                              onClick={() => toggleRole(value)}
-                            >
-                              <input type="checkbox" readOnly checked={pendingRoles.includes(value)} />
-                              {label}
-                            </label>
-                          ))}
+                          {roles.map((role) => {
+                            // The API refuses an assignment above the
+                            // assigner's own rank, so disable rather than
+                            // let someone pick it and receive a 403.
+                            const tooSenior = role.rank > myRank;
+                            return (
+                              <label
+                                key={role.key}
+                                className={`role-option ${pendingRoles.includes(role.key) ? "selected" : ""}`}
+                                title={tooSenior ? "More senior than your own role" : role.capabilities.join(", ")}
+                                style={tooSenior ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                                onClick={() => { if (!tooSenior) toggleRole(role.key); }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  readOnly
+                                  disabled={tooSenior}
+                                  checked={pendingRoles.includes(role.key)}
+                                />
+                                {role.label}
+                              </label>
+                            );
+                          })}
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -146,7 +171,7 @@ export default function UsersPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -154,22 +179,26 @@ export default function UsersPage() {
       </div>
 
       <div className="card mt-4">
-        <div className="card-header"><h3>Role Definitions</h3></div>
+        <div className="card-header">
+          <h3>Role definitions</h3>
+          <a className="btn-secondary btn-sm" href="/admin/roles">Manage roles</a>
+        </div>
         <table className="table">
-          <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+          <thead><tr><th>Role</th><th>Permitted</th></tr></thead>
           <tbody>
-            <tr><td><span className="badge badge-role-platform_admin">Platform Admin</span></td><td className="text-sm text-muted">Full access — manage users, workflows, audit data, and system config</td></tr>
-            <tr><td><span className="badge badge-role-workflow_designer">Workflow Designer</span></td><td className="text-sm text-muted">Create and edit workflow definitions, states, transitions and rules</td></tr>
-            <tr><td><span className="badge badge-role-approver">Approver</span></td><td className="text-sm text-muted">Approve transitions that require sign-off; view assigned instances</td></tr>
-            <tr><td><span className="badge badge-role-participant">Participant</span></td><td className="text-sm text-muted">Submit and progress workflow instances; complete assigned tasks</td></tr>
-            <tr><td><span className="badge badge-role-viewer">Viewer</span></td><td className="text-sm text-muted">Read-only access to instances and audit trails</td></tr>
+            {roles.map((role) => (
+              <tr key={role.id}>
+                <td><span className={`badge badge-role-${role.key}`}>{role.label}</span></td>
+                <td className="text-sm text-muted">
+                  {role.capabilities.length === 0
+                    ? "Nothing yet"
+                    : role.capabilities.join(", ")}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     </div>
   );
-}
-
-function roleLabel(role: string) {
-  return ALL_ROLES.find((r) => r.value === role)?.label ?? role;
 }
