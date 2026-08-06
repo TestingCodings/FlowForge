@@ -41,7 +41,7 @@ jobs:
         run: npm run build
 
   # Dependency vulnerability gates. Baselines are clean as of 2026-07 (Django
-  # 5.2 LTS, cryptography 48, simplejwt 5.5, pytest 9), so these enforce.
+  # 5.2 LTS, cryptography 50, simplejwt 5.5, pytest 9), so these enforce.
   # The frontend gate covers production dependencies only; the rationale and
   # the currently-accepted dev-tooling advisories are in docs/DEPLOYMENT.md.
   security-audit:
