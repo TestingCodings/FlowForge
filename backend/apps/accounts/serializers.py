@@ -36,6 +36,37 @@ class UserSerializer(serializers.ModelSerializer):
         return list(obj.user_roles.select_related("role").values_list("role__name", flat=True))
 
 
+class MeSerializer(UserSerializer):
+    """The signed-in user, plus what they may actually do.
+
+    The UI has to decide which controls to render, and until now it did that
+    by mapping role names to capabilities in the frontend. That map was a
+    frozen copy of the backend's, written before roles were data: a custom
+    role appeared in `roles` but matched nothing in the map, so a Site Manager
+    was shown the interface of someone with no permissions at all.
+
+    Serving the resolved set means there is one authority. The frontend stops
+    guessing, and a capability added to a role server-side reaches the UI
+    without a corresponding frontend change.
+
+    This is for rendering decisions only. Every one of these is still enforced
+    server-side on the request itself, and must stay that way — a client can
+    send whatever it likes regardless of what this told it.
+    """
+
+    capabilities = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ("capabilities",)
+
+    def get_capabilities(self, obj):
+        from .permissions import capabilities_for
+
+        # Sorted so the response is stable, which keeps it cacheable and
+        # makes a diff in a test readable.
+        return sorted(capabilities_for(obj))
+
+
 class FlowForgeTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Extend the default JWT login response to include basic user info."""
 

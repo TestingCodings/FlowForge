@@ -11,6 +11,7 @@ from .permissions import IsPlatformAdmin, require_capability
 from rest_framework.exceptions import PermissionDenied
 from .serializers import (
     FlowForgeTokenObtainPairSerializer,
+    MeSerializer,
     RegisterSerializer,
     RoleSerializer,
     UserSerializer,
@@ -46,7 +47,10 @@ class LoginView(TokenObtainPairView):
 
 class MeView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = UserSerializer
+    # MeSerializer, not UserSerializer: this is the only place the resolved
+    # capability set belongs. Putting it on the user list would leak what
+    # every other person may do, and cost a query per row to say it.
+    serializer_class = MeSerializer
 
     def get_object(self):
         return self.request.user

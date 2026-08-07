@@ -16,9 +16,15 @@ import { UserProfile } from "../types/api";
  * hints for things they can neither change nor create. Scattered role
  * literals made that impossible to apply consistently.
  *
- * When roles become data (docs/ROLES.md §2) the role→capability map below is
- * replaced by a set the API returns, and callers don't change.
+ * The set comes from `/auth/me/`. It used to come from a role-to-capability
+ * map kept in this file, which was a second copy of the backend's and was
+ * written before roles were data: it only knew the five built-ins, so a
+ * custom role matched nothing and its holder was shown the interface of
+ * someone with no permissions at all. There is one authority now, and
+ * widening a role server-side reaches the UI without a frontend change.
  */
+
+/** Mirrors CAPABILITIES in backend/apps/accounts/models.py. */
 export type Capability =
   | "workflow.view"
   | "workflow.design"    // build/edit workflows, forms, rules — the creator sphere
@@ -34,68 +40,51 @@ export type Capability =
   | "media.upload"
   | "media.delete"
   | "user.view"
-  | "user.manage"
+  | "user.create"
+  | "user.assign_roles"
   | "secret.manage"
   | "hook.manage"
   | "audit.view"
   | "workspace.manage";
 
-const ALL = ["platform_admin", "workflow_designer", "approver", "participant", "viewer"];
-const DESIGNERS = ["platform_admin", "workflow_designer"];
-
-const PARTICIPANT_UP = ["platform_admin", "workflow_designer", "approver", "participant"];
-
-const CAPABILITY_ROLES: Record<Capability, string[]> = {
-  "workflow.view":       ALL,
-  "workflow.design":     DESIGNERS,
-  "workflow.publish":    DESIGNERS,
-  "instance.view":       ALL,
-  "instance.create":     PARTICIPANT_UP,
-  "instance.transition": PARTICIPANT_UP,
-  "instance.approve":    ["platform_admin", "workflow_designer", "approver"],
-  "instance.comment":    ALL,
-  "instance.metadata":   PARTICIPANT_UP,
-  "instance.relate":     PARTICIPANT_UP,
-  "form.submit":         PARTICIPANT_UP,
-  "media.upload":        PARTICIPANT_UP,
-  "media.delete":        DESIGNERS,
-  "user.view":           ALL,
-  "user.manage":         ["platform_admin"],
-  "secret.manage":       DESIGNERS,
-  "hook.manage":         DESIGNERS,
-  "audit.view":          DESIGNERS,
-  "workspace.manage":    ["platform_admin"],
-};
-
 /**
  * Pure predicate, usable outside React and easy to test.
  *
- * Fails closed on a capability this map does not know, matching
- * `has_capability` on the backend. It previously indexed the map directly and
- * threw a TypeError instead, so a typo at a call site would have taken the
- * page down rather than hiding one control.
+ * Fails closed on anything absent, which matches `has_capability` on the
+ * backend. Notably it fails closed on an *unknown* capability too: the
+ * server never reports one, so a typo at a call site hides a control rather
+ * than revealing it.
  */
-export function roleHas(roles: string[], capability: Capability): boolean {
-  const permitted = CAPABILITY_ROLES[capability];
-  if (!permitted) return false;
-  return roles.some((r) => permitted.includes(r));
+export function hasCapability(
+  held: readonly string[] | undefined,
+  capability: Capability,
+): boolean {
+  if (!held) return false;
+  return held.includes(capability);
 }
 
-export function useMyRoles(): string[] {
-  const { data } = useQuery<UserProfile>({
+function useMe() {
+  return useQuery<UserProfile>({
     queryKey: ["me"],
     queryFn: async () => (await apiClient.get("/auth/me/")).data,
     staleTime: 5 * 60 * 1000,
   });
-  return data?.roles ?? [];
+}
+
+export function useMyRoles(): string[] {
+  return useMe().data?.roles ?? [];
+}
+
+export function useMyCapabilities(): string[] {
+  return useMe().data?.capabilities ?? [];
 }
 
 /**
- * `can("workflow.design")` — true when the signed-in user holds a role with
- * that capability. Defaults to false while the profile is loading, so a
+ * `can("workflow.design")` — true when the signed-in user holds that
+ * capability. Defaults to false while the profile is loading, so a
  * creator-only control never flashes in front of an end user.
  */
 export function useCan(): (capability: Capability) => boolean {
-  const roles = useMyRoles();
-  return (capability: Capability) => roleHas(roles, capability);
+  const held = useMyCapabilities();
+  return (capability: Capability) => hasCapability(held, capability);
 }

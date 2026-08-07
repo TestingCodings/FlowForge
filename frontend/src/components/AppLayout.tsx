@@ -3,37 +3,60 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { UserProfile } from "../types/api";
+import { Capability, useCan } from "../hooks/useCapabilities";
 import { useUsers } from "../hooks/useUsers";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useTranslation, type MessageKey } from "../i18n";
 
 // Labels are message keys resolved through t() at render time (VISION Layer 1).
-const NAV: { sectionKey: MessageKey; links: { to: string; key: MessageKey; icon: JSX.Element }[] }[] = [
+/**
+ * The sidebar, gated by capability (docs/ROLES.md step 4).
+ *
+ * `needs` is the capability a link's destination requires. Without one, a
+ * viewer was shown New workflow, Audit log, Users, Roles and Workspace, and
+ * every one of them led to a page that refused them — which is most of what
+ * "the app feels rigid and unimpressive to demo" was describing.
+ *
+ * Links with no `needs` are for everyone: the dashboard and the user guide
+ * ask nothing of you. Everything else states what it costs, and a section
+ * with nothing left in it does not render its heading either.
+ *
+ * This is presentation. The routes and the API refuse these independently.
+ */
+type NavLinkDef = { to: string; key: MessageKey; icon: JSX.Element; needs?: Capability };
+
+const NAV: { sectionKey: MessageKey; links: NavLinkDef[] }[] = [
   {
     sectionKey: "nav.overview",
     links: [
       { to: "/dashboard", key: "nav.dashboard", icon: <DashIcon /> },
-      { to: "/instances", key: "nav.instances", icon: <InstanceIcon /> },
-      { to: "/topology",  key: "nav.topology",  icon: <TopologyIcon /> },
-      { to: "/tasks",     key: "nav.tasks",     icon: <TaskIcon /> },
+      { to: "/instances", key: "nav.instances", icon: <InstanceIcon />, needs: "instance.view" },
+      { to: "/topology",  key: "nav.topology",  icon: <TopologyIcon />, needs: "instance.view" },
+      { to: "/tasks",     key: "nav.tasks",     icon: <TaskIcon />,     needs: "instance.view" },
+      // Sat under Administration until the sections started collapsing, which
+      // left someone with no admin rights looking at an "Administration"
+      // heading whose only entry was the user guide.
+      { to: "/help",      key: "nav.userGuide", icon: <HelpIcon /> },
     ],
   },
   {
     sectionKey: "nav.configuration",
     links: [
-      { to: "/workflows",            key: "nav.workflows",    icon: <WorkflowIcon /> },
-      { to: "/workflows/new",        key: "nav.newWorkflow",  icon: <PlusIcon /> },
-      { to: "/workflows/templates",  key: "nav.templates",    icon: <TemplateIcon /> },
+      { to: "/workflows",           key: "nav.workflows",   icon: <WorkflowIcon />, needs: "workflow.view" },
+      { to: "/workflows/new",       key: "nav.newWorkflow", icon: <PlusIcon />,     needs: "workflow.design" },
+      { to: "/workflows/templates", key: "nav.templates",   icon: <TemplateIcon />, needs: "workflow.design" },
     ],
   },
   {
     sectionKey: "nav.administration",
     links: [
-      { to: "/admin/audit",     key: "nav.auditLog",  icon: <AuditIcon /> },
-      { to: "/admin/users",     key: "nav.users",     icon: <UsersIcon /> },
-      { to: "/admin/roles",     key: "nav.roles",     icon: <RolesIcon /> },
-      { to: "/admin/workspace", key: "nav.workspace", icon: <WorkflowIcon /> },
-      { to: "/help",            key: "nav.userGuide", icon: <HelpIcon /> },
+      { to: "/admin/audit",     key: "nav.auditLog",  icon: <AuditIcon />,    needs: "audit.view" },
+      { to: "/admin/users",     key: "nav.users",     icon: <UsersIcon />,    needs: "user.view" },
+      // Anyone may read the role table — badges and pickers need it — but
+      // browsing it is not a job you go to the sidebar for. The link is for
+      // the people who can change something.
+      { to: "/admin/roles",     key: "nav.roles",     icon: <RolesIcon />,    needs: "workspace.manage" },
+      { to: "/admin/workspace", key: "nav.workspace", icon: <WorkflowIcon />, needs: "workspace.manage" },
     ],
   },
 ];
@@ -68,6 +91,16 @@ export default function AppLayout() {
   const { t } = useTranslation();
 
   const { data: allUsers = [] } = useUsers();
+  const can = useCan();
+
+  // A section whose every link is gated away renders no heading either,
+  // rather than an "Administration" label with nothing under it.
+  const visibleNav = NAV
+    .map((section) => ({
+      ...section,
+      links: section.links.filter((link) => !link.needs || can(link.needs)),
+    }))
+    .filter((section) => section.links.length > 0);
 
   const initials = me
     ? `${me.first_name?.[0] ?? ""}${me.last_name?.[0] ?? ""}`.toUpperCase()
@@ -122,7 +155,7 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {NAV.map((section) => (
+          {visibleNav.map((section) => (
             <div key={section.sectionKey}>
               <div className="sidebar-section-label">{t(section.sectionKey)}</div>
               {section.links.map((link) => (

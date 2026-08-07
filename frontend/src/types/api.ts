@@ -10,6 +10,12 @@ export interface UserProfile {
   last_name: string;
   full_name: string;
   roles: string[];
+  /**
+   * Resolved capability set, unioned across the user's roles. Only
+   * `/auth/me/` sends it — the user list deliberately does not, so this is
+   * optional rather than a lie about what every UserProfile carries.
+   */
+  capabilities?: string[];
   date_joined: string;
 }
 
