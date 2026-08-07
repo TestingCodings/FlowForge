@@ -5,6 +5,11 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main, develop]
+  # Manual re-run. During the Actions outage on 2026-08-06 a push landed on
+  # main without a run ever being created, and there was no way to ask for
+  # one: re-pushing the same ref is not a push event, so the only options
+  # were an empty commit or waiting. `gh workflow run ci.yml` now covers it.
+  workflow_dispatch:
 
 # Least-privilege GITHUB_TOKEN for every job (adopted from Copilot PR #2).
 permissions:
